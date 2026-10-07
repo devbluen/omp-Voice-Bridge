@@ -364,6 +364,9 @@ private:
 	void handleDatagram(const uint8_t* data, int size, uint32_t ip, uint16_t port);
 
 	Config config_;
+	// Port that should have been used, when it was busy at startup and a
+	// random one was taken instead (0 = the wanted port is in use).
+	uint16_t busyPort_ = 0;
 	ITransport* transport_ = nullptr;
 	IWorld* world_ = nullptr;
 	IScriptEvents* events_ = nullptr;

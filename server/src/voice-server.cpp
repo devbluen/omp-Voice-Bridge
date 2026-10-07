@@ -5,6 +5,7 @@
 #include "voice-server.hpp"
 #include "log.hpp"
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -19,6 +20,31 @@ constexpr uint64_t kUdpWarnAfterMs = 10000;
 constexpr uint64_t kProbeDelayMs = 1500;
 constexpr std::size_t kMaxTunnelQueue = 8192;
 constexpr std::size_t kPositionsPerPacket = 64;
+
+// voice_log_file: empty = logs/voice-bridge.log (open.mp has a logs folder),
+// else voice-bridge.log next to the server; "off" disables the file.
+void openLogFile(const std::string& setting)
+{
+	std::string lowered = setting;
+	std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+	if (lowered == "off" || lowered == "none" || lowered == "false" || lowered == "0")
+	{
+		LogSetFile("");
+		return;
+	}
+	if (!setting.empty())
+	{
+		if (!LogSetFile(setting))
+		{
+			LogWarning("could not open the voice log file '%s'", setting.c_str());
+		}
+	}
+	else if (!LogSetFile("logs/voice-bridge.log"))
+	{
+		LogSetFile("voice-bridge.log");
+	}
+	LogDebug("---------------- voice server starting ----------------");
+}
 
 template <typename T>
 void append(std::vector<uint8_t>& buffer, const T& value)
@@ -150,21 +176,36 @@ bool VoiceServer::start(const Config& config, ITransport* transport, IWorld* wor
 	allowSampVoice_ = config.allowSampVoice;
 	allowVoiceBridge_ = config.allowVoiceBridge;
 	LogSetDebug(config.debug);
+	openLogFile(config.logFile);
 
 	const std::string bindIp = config.bind.empty() ? config.gameBind : config.bind;
 	const uint16_t wanted = config.port ? config.port : static_cast<uint16_t>(config.gamePort < 65535 ? config.gamePort + 1 : 0);
 	std::string error;
-	if (!socket_.open(bindIp, wanted, error))
+	busyPort_ = 0;
+	// A server restarted right away may still hold the port for a moment.
+	bool opened = false;
+	for (int attempt = 0; attempt < 10 && !opened; ++attempt)
 	{
-		LogWarning("could not open voice UDP port %u on %s: %s", wanted, bindIp.empty() ? "*" : bindIp.c_str(), error.c_str());
+		opened = socket_.open(bindIp, wanted, error);
+		if (!opened && wanted)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(300));
+		}
+	}
+	if (!opened)
+	{
+		LogError("could not open voice UDP port %u on %s: %s. Another program or server is using it.", wanted,
+			bindIp.empty() ? "*" : bindIp.c_str(), error.c_str());
 		std::string retryError;
 		if (!socket_.open(bindIp, 0, retryError))
 		{
 			LogError("voice server disabled, no UDP port could be opened: %s", retryError.c_str());
 			return false;
 		}
-		LogWarning("using random UDP port %u instead. Set voice_port to a free port and open it in the firewall;"
-			" until then Voice Bridge clients fall back to the game connection", socket_.localPort());
+		busyPort_ = wanted;
+		LogError("using random UDP port %u instead of %u. Players with SampVoice will NOT talk or hear (it has no fallback), and Voice"
+			" Bridge players use the slower game-connection tunnel. Fix: free port %u, or set voice_port to a free port open in the"
+			" firewall/hosting panel.", socket_.localPort(), wanted, wanted);
 	}
 
 	for (uint16_t i = 0; i < kMaxPlayers; ++i)
@@ -372,6 +413,12 @@ void VoiceServer::onPlayerDisconnect(uint16_t player)
 	{
 		return;
 	}
+	const Player& p = players_[player];
+	if (p.plugin)
+	{
+		LogDebug("player %u left (%s, voice %s)", player, p.extended ? "Voice Bridge" : "SampVoice",
+			p.transport == vb::transport::udp ? "over UDP" : p.transport == vb::transport::tunnel ? "over the tunnel" : "never connected");
+	}
 	resetPlayer(player, true);
 	flushOutbox();
 }
@@ -505,7 +552,11 @@ void VoiceServer::onClientJoin(uint16_t player, const uint8_t* data, std::size_t
 			hasHello ? "Voice Bridge" : "SampVoice", players_[player].micro ? "yes" : "no", FormatIp(players_[player].gameIp).c_str());
 		completeHandshake(player);
 	}
-	else if (type != ClientType::None)
+	else if (type == ClientType::None)
+	{
+		LogDebug("player %u joined without a voice client (ip %s)", player, FormatIp(players_[player].gameIp).c_str());
+	}
+	else
 	{
 		LogInfo("player %u uses %s, which is not allowed on this server", player, hasHello ? "Voice Bridge" : "SampVoice");
 		if (events_)
@@ -1929,6 +1980,11 @@ void VoiceServer::tickDiagnostics()
 				LogWarning("player %u (%s) has a voice client but none of its UDP packets reached port %u. It will not talk or hear until"
 					" UDP %u is open in the firewall/hosting panel%s.", id, FormatIp(p.gameIp).c_str(), port(), port(),
 					p.extended ? "" : " (SampVoice clients cannot use the tunnel)");
+				if (busyPort_)
+				{
+					LogWarning("note: %u is a random port because the voice port %u was busy at startup (see the start of the voice log)",
+						port(), busyPort_);
+				}
 			}
 		}
 

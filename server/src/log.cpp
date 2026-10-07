@@ -6,6 +6,7 @@
 #include <core.hpp>
 #include <atomic>
 #include <cstdio>
+#include <ctime>
 #include <deque>
 #include <mutex>
 #include <thread>
@@ -33,6 +34,61 @@ bool g_mainKnown = false;
 ICore* g_core = nullptr;
 void (*g_printer)(const char* format, ...) = nullptr;
 std::atomic<bool> g_debug { false };
+
+// Voice log file.  Written directly from any thread under its own lock, so
+// worker thread events keep their real time.
+constexpr long kMaxFileBytes = 5 * 1024 * 1024;
+std::mutex g_fileMutex;
+std::FILE* g_file = nullptr;
+std::string g_filePath;
+
+const char* levelName(Level level)
+{
+	switch (level)
+	{
+	case Level::Warning:
+		return "Warning";
+	case Level::Error:
+		return "Error";
+	case Level::Debug:
+		return "Detail";
+	default:
+		return "Info";
+	}
+}
+
+void writeFile(Level level, const std::string& message)
+{
+	std::lock_guard<std::mutex> lock(g_fileMutex);
+	if (!g_file)
+	{
+		return;
+	}
+	if (std::ftell(g_file) > kMaxFileBytes)
+	{
+		// Keep one previous file: voice-bridge.log -> voice-bridge.log.old
+		std::fclose(g_file);
+		const std::string old = g_filePath + ".old";
+		std::remove(old.c_str());
+		std::rename(g_filePath.c_str(), old.c_str());
+		g_file = std::fopen(g_filePath.c_str(), "a");
+		if (!g_file)
+		{
+			return;
+		}
+	}
+	const std::time_t t = std::time(nullptr);
+	std::tm local {};
+#ifdef _WIN32
+	localtime_s(&local, &t);
+#else
+	localtime_r(&t, &local);
+#endif
+	char stamp[32];
+	std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &local);
+	std::fprintf(g_file, "[%s] [%s] %s\n", stamp, levelName(level), message.c_str());
+	std::fflush(g_file);
+}
 
 const char* prefix(Level level)
 {
@@ -83,6 +139,11 @@ void write(Level level, const char* format, va_list args)
 	char buffer[1024];
 	std::vsnprintf(buffer, sizeof(buffer), format, args);
 	std::string message(buffer);
+	writeFile(level, message);
+	if (level == Level::Debug && !g_debug)
+	{
+		return; // details go to the voice log only, unless voice_debug is on
+	}
 
 	if (g_mainKnown && std::this_thread::get_id() != g_mainThread)
 	{
@@ -175,12 +236,24 @@ void LogError(const char* format, ...)
 	va_end(args);
 }
 
+bool LogSetFile(const std::string& path)
+{
+	std::lock_guard<std::mutex> lock(g_fileMutex);
+	if (g_file)
+	{
+		std::fclose(g_file);
+		g_file = nullptr;
+	}
+	g_filePath = path;
+	if (!path.empty())
+	{
+		g_file = std::fopen(path.c_str(), "a");
+	}
+	return g_file != nullptr;
+}
+
 void LogDebug(const char* format, ...)
 {
-	if (!g_debug)
-	{
-		return;
-	}
 	va_list args;
 	va_start(args, format);
 	write(Level::Debug, format, args);

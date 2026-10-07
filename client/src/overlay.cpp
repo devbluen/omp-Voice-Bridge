@@ -37,6 +37,14 @@ using ResetFn = HRESULT(WINAPI*)(IDirect3DDevice9*, D3DPRESENT_PARAMETERS*);
 
 PresentFn g_present = nullptr;
 ResetFn g_reset = nullptr;
+// The functions found the first time we hooked (Direct3D itself, or a hook
+// installed before us).  Used when our hook is re-entered: SA-MP hooks after
+// us and calls us as its "original"; if we then hook again on top of it,
+// each would call the other forever (crash after alt+tab).
+PresentFn g_basePresent = nullptr;
+ResetFn g_baseReset = nullptr;
+thread_local bool g_inPresent = false;
+thread_local bool g_inReset = false;
 void** g_vtable = nullptr;
 HWND g_window = nullptr;
 WNDPROC g_windowProc = nullptr;
@@ -518,6 +526,7 @@ void pageAbout()
 	sectionTitle(tr("Credits", "Créditos"));
 	infoRow(VOICE_BRIDGE_AUTHOR, tr("creator", "criador"));
 	infoRow("MMV (Ramon)", tr("testing and ideas", "testes e ideias"));
+	infoRow("Claude (Anthropic)", tr("development assistance", "auxílio no desenvolvimento"));
 	infoRow("MOR (CyberMor)", tr("original SampVoice protocol", "protocolo original do SampVoice"));
 }
 
@@ -987,6 +996,15 @@ void initImGui(IDirect3DDevice9* device)
 
 HRESULT WINAPI presentHook(IDirect3DDevice9* device, const RECT* source, const RECT* destination, HWND window, const RGNDATA* dirty)
 {
+	if (g_inPresent)
+	{
+		return g_basePresent(device, source, destination, window, dirty);
+	}
+	struct Guard
+	{
+		Guard() { g_inPresent = true; }
+		~Guard() { g_inPresent = false; }
+	} guard;
 	g_lastPresent = GetTickCount64();
 	if (!g_imgui)
 	{
@@ -1066,6 +1084,15 @@ HRESULT WINAPI presentHook(IDirect3DDevice9* device, const RECT* source, const R
 
 HRESULT WINAPI resetHook(IDirect3DDevice9* device, D3DPRESENT_PARAMETERS* parameters)
 {
+	if (g_inReset)
+	{
+		return g_baseReset(device, parameters);
+	}
+	struct Guard
+	{
+		Guard() { g_inReset = true; }
+		~Guard() { g_inReset = false; }
+	} guard;
 	if (g_imgui)
 	{
 		ImGui_ImplDX9_InvalidateDeviceObjects();
@@ -1088,10 +1115,18 @@ bool hookVtable(void** vtable)
 	if (vtable[kPresentIndex] != reinterpret_cast<void*>(&presentHook))
 	{
 		g_present = reinterpret_cast<PresentFn>(vtable[kPresentIndex]);
+		if (!g_basePresent)
+		{
+			g_basePresent = g_present;
+		}
 	}
 	if (vtable[kResetIndex] != reinterpret_cast<void*>(&resetHook))
 	{
 		g_reset = reinterpret_cast<ResetFn>(vtable[kResetIndex]);
+		if (!g_baseReset)
+		{
+			g_baseReset = g_reset;
+		}
 	}
 	// The game thread may call the new entries as soon as they are written.
 	std::atomic_thread_fence(std::memory_order_seq_cst);
@@ -1143,13 +1178,26 @@ bool Install()
 	for (;;)
 	{
 		Sleep(500);
+		if (g_window && !IsWindow(g_window))
+		{
+			return true; // the game is closing
+		}
+		// Minimised or in the background (alt+tab) the game stops drawing:
+		// that is not a lost hook.
+		if (g_window && (IsIconic(g_window) || GetForegroundWindow() != g_window))
+		{
+			g_lastPresent = GetTickCount64();
+			continue;
+		}
 		IDirect3DDevice9* current = nullptr;
-		if (!samp::Read(kGameDevice, current) || !current)
+		void** vtable = nullptr;
+		void* present = nullptr;
+		if (!samp::Read(kGameDevice, current) || !current || !samp::SafeRead(current, &vtable, sizeof(vtable)) || !vtable
+			|| !samp::SafeRead(&vtable[kPresentIndex], &present, sizeof(present)))
 		{
 			continue;
 		}
-		void** vtable = *reinterpret_cast<void***>(current);
-		if (vtable[kPresentIndex] == reinterpret_cast<void*>(&presentHook) || GetTickCount64() - g_lastPresent < 2000)
+		if (present == reinterpret_cast<void*>(&presentHook) || GetTickCount64() - g_lastPresent < 2000)
 		{
 			continue;
 		}

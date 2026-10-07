@@ -103,7 +103,8 @@ voice_bitrate 24000
 |---|---|---|---|
 | `strict_ip` | `voice_strict_ip` | false | Only accept voice from the game IP. When off, another IP (proxy/anti-DDoS) is accepted and logged. |
 | `max_packets_per_second` | `voice_max_packets_per_second` | 80 | Per-player flood limit. |
-| `debug` | `voice_debug` | false | Verbose log. |
+| `debug` | `voice_debug` | false | Also print the details on the console. |
+| `log_file` | `voice_log_file` | - | Voice-only log with date, time and every detail. Default: `logs/voice-bridge.log` (open.mp) or `voice-bridge.log`. `off` disables it. |
 
 Environment variables: `VOICE_BRIDGE_` + the name in upper case (e.g. `VOICE_BRIDGE_PORT`, `VOICE_BRIDGE_MAX_PACKETS`).
 
@@ -352,6 +353,7 @@ Settings are stored in `voicebridge.ini` in the GTA folder. `voicebridge.log` re
 
 | Symptom | Check |
 |---|---|
+| SampVoice players can't talk or hear, warning "none of its UDP packets reached port" with an odd port (e.g. 51665) | The voice port was busy when the server started and the plugin took a random one, which is not open. The start of `voice-bridge.log` says which port was busy. Free it (another server/program) or set `voice_port` to a free, open port. |
 | Nobody connects to voice | Is the UDP port from the log open in the firewall/panel? With the tunnel on (default), Voice Bridge clients work anyway. |
 | Stuck on "Connecting..." | The server log reports players whose UDP never arrives. |
 | Several servers on one machine | Give each one a different `voice_port`. |
@@ -432,6 +434,7 @@ dist/
 
 - **Voice Bridge**: created by [devbluen](https://github.com/devbluen). Code, issues and releases at [github.com/devbluen/omp-Voice-Bridge](https://github.com/devbluen/omp-Voice-Bridge).
 - **MMV (Ramon)**: testing and ideas.
+- **Claude (Anthropic)**: development assistance (server, client, protocol, tests and documentation).
 - **SampVoice**: original protocol and API by MOR (CyberMor), followed for compatibility; open.mp port by AmyrAhmady (iAmir).
 - Libraries: [Opus](https://opus-codec.org), [Dear ImGui](https://github.com/ocornut/imgui), BASS (shipped with SA-MP) and the open.mp SDK.
 

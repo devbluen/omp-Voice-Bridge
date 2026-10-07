@@ -202,6 +202,7 @@ void VoiceBridgeComponent::provideConfiguration(ILogger&, IEarlyConfig& config, 
 	config.setBool("voice_bridge.allow_sampvoice", true);
 	config.setBool("voice_bridge.allow_voicebridge", true);
 	config.setBool("voice_bridge.debug", false);
+	config.setString("voice_bridge.log_file", "");
 }
 
 void VoiceBridgeComponent::shutdown()

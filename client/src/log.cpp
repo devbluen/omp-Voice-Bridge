@@ -48,6 +48,19 @@ void LogClose()
 	}
 }
 
+void TryLog(const char* text)
+{
+	SYSTEMTIME time {};
+	GetLocalTime(&time);
+	std::unique_lock<std::mutex> lock(g_mutex, std::try_to_lock);
+	if (!lock.owns_lock() || !g_file)
+	{
+		return;
+	}
+	std::fprintf(g_file, "[%02u:%02u:%02u.%03u] %s\n", time.wHour, time.wMinute, time.wSecond, time.wMilliseconds, text);
+	std::fflush(g_file);
+}
+
 void Log(const char* format, ...)
 {
 	char message[1024];

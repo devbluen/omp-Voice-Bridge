@@ -20,6 +20,9 @@ void LogSetPrinter(void (*printer)(const char* format, ...));
 void LogSetDebug(bool enabled);
 bool LogDebugEnabled();
 void LogFlush();
+// Voice log file: every message (debug ones too) with date and time.
+// An empty path closes it.
+bool LogSetFile(const std::string& path);
 
 void LogInfo(const char* format, ...);
 void LogWarning(const char* format, ...);

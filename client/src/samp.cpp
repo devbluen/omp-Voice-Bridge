@@ -176,12 +176,12 @@ uintptr_t pool(uint32_t member)
 }
 }
 
-bool SafeRead(const void* address, void* out, std::size_t size)
+namespace
 {
-	if (!address)
-	{
-		return false;
-	}
+thread_local bool g_inSafeRead = false;
+
+bool safeCopy(const void* address, void* out, std::size_t size)
+{
 	__try
 	{
 		std::memcpy(out, address, size);
@@ -191,6 +191,25 @@ bool SafeRead(const void* address, void* out, std::size_t size)
 	{
 		return false;
 	}
+}
+}
+
+bool SafeRead(const void* address, void* out, std::size_t size)
+{
+	if (!address)
+	{
+		return false;
+	}
+	// Faults here are expected; the crash logger ignores them.
+	g_inSafeRead = true;
+	const bool ok = safeCopy(address, out, size);
+	g_inSafeRead = false;
+	return ok;
+}
+
+bool InSafeRead()
+{
+	return g_inSafeRead;
 }
 
 bool Detect(HMODULE module)

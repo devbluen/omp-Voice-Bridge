@@ -35,6 +35,8 @@ uintptr_t Base();
 
 // Reads memory without faulting on bad pointers.
 bool SafeRead(const void* address, void* out, std::size_t size);
+// True while SafeRead is copying on this thread (its faults are expected).
+bool InSafeRead();
 template <typename T>
 bool Read(uintptr_t address, T& out)
 {

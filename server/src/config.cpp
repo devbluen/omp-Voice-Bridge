@@ -219,6 +219,7 @@ Config LoadConfig(ConfigSource& source)
 	const Key keepAlive { "VOICE_BRIDGE_KEEPALIVE_MS", "voice_bridge.keepalive_ms", "voice_keepalive_ms", nullptr, nullptr };
 	const Key maxPackets { "VOICE_BRIDGE_MAX_PACKETS", "voice_bridge.max_packets_per_second", "voice_max_packets_per_second", nullptr, nullptr };
 	const Key debug { "VOICE_BRIDGE_DEBUG", "voice_bridge.debug", "voice_debug", nullptr, nullptr };
+	const Key logFile { "VOICE_BRIDGE_LOG_FILE", "voice_bridge.log_file", "voice_log_file", nullptr, nullptr };
 	const Key voiceActivation { "VOICE_BRIDGE_ALLOW_VOICE_ACTIVATION", "voice_bridge.allow_voice_activation", "voice_allow_voice_activation", nullptr, nullptr };
 	const Key speakerList { "VOICE_BRIDGE_SHOW_SPEAKER_LIST", "voice_bridge.show_speaker_list", "voice_show_speaker_list", nullptr, nullptr };
 	const Key micIcon { "VOICE_BRIDGE_SHOW_MIC_ICON", "voice_bridge.show_mic_icon", "voice_show_mic_icon", nullptr, nullptr };
@@ -253,6 +254,7 @@ Config LoadConfig(ConfigSource& source)
 	readRanged(source, keepAlive, config.keepAliveMs, 1000, 60000, "voice_keepalive_ms");
 	readRanged(source, maxPackets, config.maxPacketsPerSecond, 10, 1000, "voice_max_packets_per_second");
 	lookupBool(source, debug, config.debug);
+	lookupString(source, logFile, config.logFile);
 	lookupBool(source, voiceActivation, config.allowVoiceActivation);
 	lookupBool(source, speakerList, config.showSpeakerList);
 	lookupBool(source, micIcon, config.showMicIcon);

@@ -103,7 +103,8 @@ voice_bitrate 24000
 |---|---|---|---|
 | `strict_ip` | `voice_strict_ip` | false | Aceita voz só do IP do jogo. Desligado, outro IP (proxy/anti-DDoS) é aceito e registrado no log. |
 | `max_packets_per_second` | `voice_max_packets_per_second` | 80 | Limite anti-flood por jogador. |
-| `debug` | `voice_debug` | false | Log detalhado. |
+| `debug` | `voice_debug` | false | Mostra também os detalhes no console. |
+| `log_file` | `voice_log_file` | - | Log só da voz, com data e hora e todos os detalhes. Padrão: `logs/voice-bridge.log` (open.mp) ou `voice-bridge.log`. `off` desliga. |
 
 Variáveis de ambiente: `VOICE_BRIDGE_` + nome em maiúsculas (ex.: `VOICE_BRIDGE_PORT`, `VOICE_BRIDGE_MAX_PACKETS`).
 
@@ -352,6 +353,7 @@ As opções ficam no `voicebridge.ini`, na pasta do GTA. O `voicebridge.log` reg
 
 | Sintoma | O que verificar |
 |---|---|
+| Jogadores com SampVoice surdos e mudos, aviso "none of its UDP packets reached port" com uma porta estranha (ex.: 51665) | A porta de voz estava ocupada quando o servidor iniciou e o plugin usou uma aleatória, que não está liberada. Veja o início do `voice-bridge.log`: ele diz qual porta estava ocupada. Libere essa porta (outro servidor/programa usando) ou defina `voice_port` com uma porta livre e liberada. |
 | Ninguém conecta na voz | A porta UDP do log está liberada no firewall/painel? Com o túnel ativo (padrão), clients Voice Bridge funcionam mesmo assim. |
 | Fica em "Conectando..." | Veja o log do servidor: ele avisa quando o UDP de um jogador nunca chega. |
 | Vários servidores na mesma máquina | Defina `voice_port` diferente em cada um. |
@@ -432,6 +434,7 @@ dist/
 
 - **Voice Bridge**: criado por [devbluen](https://github.com/devbluen). Código, issues e releases em [github.com/devbluen/omp-Voice-Bridge](https://github.com/devbluen/omp-Voice-Bridge).
 - **MMV (Ramon)**: testes e ideias.
+- **Claude (Anthropic)**: auxílio no desenvolvimento (servidor, client, protocolo, testes e documentação).
 - **SampVoice**: protocolo e API originais de MOR (CyberMor), seguidos para manter a compatibilidade; porte para open.mp por AmyrAhmady (iAmir).
 - Bibliotecas: [Opus](https://opus-codec.org), [Dear ImGui](https://github.com/ocornut/imgui), BASS (já vem com o SA-MP) e o SDK do open.mp.
 

@@ -232,6 +232,7 @@ void testVoiceRouting()
 	FakeWorld world;
 	FakeEvents events;
 	Config config;
+	config.logFile = "off"; // no voice log file from the tests
 	config.port = 0;
 	config.gamePort = 65535; // makes the server pick a free port
 	config.bind = "127.0.0.1";
@@ -399,6 +400,7 @@ void testDynamicStreams()
 	FakeWorld world;
 	FakeEvents events;
 	Config config;
+	config.logFile = "off"; // no voice log file from the tests
 	config.gamePort = 65535;
 	config.bind = "127.0.0.1";
 	config.streamTickMs = 20;
@@ -445,6 +447,7 @@ void testSequencedEnvelope()
 	FakeWorld world;
 	FakeEvents events;
 	Config config;
+	config.logFile = "off"; // no voice log file from the tests
 	config.gamePort = 65535;
 	config.bind = "127.0.0.1";
 	VoiceServer& server = VoiceServer::Get();
@@ -478,6 +481,7 @@ void testSecurityAndClientTypes()
 	FakeWorld world;
 	FakeEvents events;
 	Config config;
+	config.logFile = "off"; // no voice log file from the tests
 	config.gamePort = 65535;
 	config.bind = "127.0.0.1";
 	VoiceServer& server = VoiceServer::Get();

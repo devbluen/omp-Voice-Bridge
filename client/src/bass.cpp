@@ -31,10 +31,13 @@ bool Load()
 	{
 		return true;
 	}
-	HMODULE module = GetModuleHandleA("bass.dll");
-	if (!module)
+	// Our own reference, pinned: SA-MP may free bass.dll on exit while our
+	// channels, DSP and UDP thread still use it.
+	HMODULE module = LoadLibraryA("bass.dll");
+	if (module)
 	{
-		module = LoadLibraryA("bass.dll");
+		HMODULE pinned = nullptr;
+		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_PIN, "bass.dll", &pinned);
 	}
 	if (!module)
 	{

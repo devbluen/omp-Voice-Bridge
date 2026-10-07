@@ -36,6 +36,7 @@ target_compile_definitions(voice-bridge-imgui PUBLIC IMGUI_DISABLE_DEMO_WINDOWS 
 
 add_library(voice-bridge-client SHARED
 	src/audio.cpp
+	src/crash.cpp
 	src/bass.cpp
 	src/game.cpp
 	src/log.cpp

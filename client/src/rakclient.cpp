@@ -6,6 +6,7 @@
 #include "log.hpp"
 #include <vb-protocol.hpp>
 #include <cstring>
+#include <windows.h>
 
 namespace vbc::rak
 {
@@ -15,6 +16,11 @@ Events* g_events = nullptr;
 RakClientInterface* g_original = nullptr;
 RakClientInterface* g_proxy = nullptr;
 bool g_connected = false;
+// CNetGame's RakClient pointer the proxy was written to.
+void** g_slot = nullptr;
+// When the proxy handed the slot back to SA-MP (see Proxy::Disconnect).
+uint64_t g_retiredAt = 0;
+constexpr uint64_t kReinstallAfterMs = 10000;
 
 BitStream makeStream(uint8_t* data, std::size_t size)
 {
@@ -65,6 +71,19 @@ public:
 		}
 		g_connected = false;
 		o_->Disconnect(blockDuration, orderingChannel);
+
+		// SA-MP disconnects right before destroying the RakClient (/q, game
+		// exit), and it destroys it as its own concrete class: the pointer
+		// is adjusted to the start of that class, which on this proxy lands
+		// on unrelated memory (crash in CNetGame::~CNetGame).  Hand its own
+		// object back first; the proxy is simply left alive.
+		if (g_slot && *g_slot == this)
+		{
+			*g_slot = o_;
+			g_proxy = nullptr;
+			g_retiredAt = GetTickCount64();
+			Log("RakClient handed back to SA-MP");
+		}
 	}
 
 	void InitializeSecurity(const char* privKeyP, const char* privKeyQ) override { o_->InitializeSecurity(privKeyP, privKeyQ); }
@@ -239,7 +258,15 @@ bool Install(void** slot, Events* events)
 	{
 		return true;
 	}
+	// Not again right after a disconnect: SA-MP may be destroying CNetGame.
+	// If the game keeps running (a disconnect that was not an exit), voice
+	// comes back after a few seconds.
+	if (g_retiredAt && GetTickCount64() - g_retiredAt < kReinstallAfterMs)
+	{
+		return false;
+	}
 	g_events = events;
+	g_slot = slot;
 	auto* proxy = new Proxy(current);
 	g_original = current;
 	g_proxy = proxy;
