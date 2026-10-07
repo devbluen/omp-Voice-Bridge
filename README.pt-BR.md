@@ -422,6 +422,12 @@ dist/
 - No SA-MP o plugin intercepta o `RakServer` por padrão de bytes (0.3.7/0.3.DL) e lê posições chamando as natives do próprio servidor. No open.mp usa o SDK.
 - O client usa a `bass.dll` do SA-MP e renderiza o som 3D a partir do personagem: diferença de tempo e de timbre entre os ouvidos, perda de agudos com a distância e eco do ambiente.
 
+## Screenshots Client
+<img width="1097" height="628" alt="Captura de tela 2026-10-07 031248" src="https://github.com/user-attachments/assets/4f9a444b-c85d-497b-a7bb-1f04bb038e54" />
+<img width="1045" height="659" alt="Captura de tela 2026-10-07 031309" src="https://github.com/user-attachments/assets/ccd3cb0f-be8e-4a93-a6cc-2181c782b81f" />
+<img width="1155" height="657" alt="Captura de tela 2026-10-07 031224" src="https://github.com/user-attachments/assets/bdfacfbf-5b63-4946-9f88-fb7d34d0e1ba" />
+<img width="274" height="240" alt="Captura de tela 2026-10-07 031408" src="https://github.com/user-attachments/assets/f9272d9a-387b-4a6a-a1b2-02d94be5102a" />
+
 ## Créditos
 
 - **Voice Bridge**: criado por [devbluen](https://github.com/devbluen). Código, issues e releases em [github.com/devbluen/omp-Voice-Bridge](https://github.com/devbluen/omp-Voice-Bridge).
