@@ -1,0 +1,20 @@
+# Build output
+/build/
+/build-*/
+/cmake-build-*/
+/out/
+/dist/
+/artifacts/
+/package/
+
+# IDE and editor state
+.cache/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Logs and crash dumps
+*.log
+*.dmp

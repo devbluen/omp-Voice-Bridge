@@ -1,0 +1,6 @@
+[submodule "omp-sdk"]
+	path = omp-sdk
+	url = https://github.com/openmultiplayer/open.mp-sdk
+[submodule "samp-sdk"]
+	path = samp-sdk
+	url = https://github.com/maddinat0r/samp-plugin-sdk.git

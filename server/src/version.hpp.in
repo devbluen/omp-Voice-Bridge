@@ -1,0 +1,13 @@
+/*
+ *  Voice Bridge for open.mp and SA-MP
+ */
+
+#pragma once
+
+// Generated from the CMake project version.
+#define VOICE_BRIDGE_VERSION "@PROJECT_VERSION@"
+#define VOICE_BRIDGE_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define VOICE_BRIDGE_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define VOICE_BRIDGE_VERSION_PATCH @PROJECT_VERSION_PATCH@
+// Numeric build reported by the client in its hello (MAJOR*10000 + MINOR*100 + PATCH).
+#define VOICE_BRIDGE_CLIENT_BUILD (@PROJECT_VERSION_MAJOR@ * 10000 + @PROJECT_VERSION_MINOR@ * 100 + @PROJECT_VERSION_PATCH@)

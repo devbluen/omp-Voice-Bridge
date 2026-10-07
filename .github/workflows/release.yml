@@ -1,0 +1,87 @@
+name: Release Voice Bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (MAJOR.MINOR.PATCH, empty = VERSION file)"
+        required: false
+        type: string
+        default: ""
+      prerelease:
+        description: "Mark as pre-release"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    name: Validate version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Check format
+        id: check
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          VERSION="${VERSION:-$(tr -d '[:space:]' < VERSION)}"
+          if [[ ! "$VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || (( 10#${BASH_REMATCH[1]} > 6 || 10#${BASH_REMATCH[2]} > 99 || 10#${BASH_REMATCH[3]} > 99 )); then
+            echo "version must be MAJOR.MINOR.PATCH with MAJOR 0-6, MINOR 0-99, PATCH 0-99 (got '$VERSION')" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: validate
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish GitHub release
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Voice Bridge v${VERSION}"
+            echo
+            echo "### Players"
+            echo "Download \`voice-bridge-client-${VERSION}.zip\` and copy \`voice-bridge.asi\` into the GTA San Andreas folder."
+            echo "Works with SA-MP 0.3.7 R1/R2/R3/R4/R5 and 0.3.DL, on Voice Bridge and SampVoice servers."
+            echo
+            echo "### Servers"
+            echo "- open.mp: copy \`voice-bridge.dll\`/\`voice-bridge.so\` into \`components/\`."
+            echo "- SA-MP: copy it into \`plugins/\` and add \`voice-bridge\` to the \`plugins\` line of server.cfg."
+            echo "- Copy \`include/*.inc\` into your Pawn include folder."
+            echo "- Open the voice UDP port (game port + 1 by default, \`voice_port\` to change it)."
+          } > notes.md
+          args=("v${VERSION}" --title "Voice Bridge v${VERSION}" --notes-file notes.md)
+          if [[ "$PRERELEASE" == "true" ]]; then args+=(--prerelease); else args+=(--latest); fi
+          gh release create "${args[@]}" artifacts/*

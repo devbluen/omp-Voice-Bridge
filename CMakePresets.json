@@ -1,0 +1,45 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "windows-server",
+      "displayName": "Server (Windows, 32-bit: open.mp and SA-MP)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "Win32", "strategy": "set" },
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "VOICE_BRIDGE_BUILD_SERVER": "ON", "VOICE_BRIDGE_BUILD_CLIENT": "OFF" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "windows-client",
+      "displayName": "Client mod (voice-bridge.asi)",
+      "generator": "Visual Studio 17 2022",
+      "architecture": { "value": "Win32", "strategy": "set" },
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "VOICE_BRIDGE_BUILD_SERVER": "OFF", "VOICE_BRIDGE_BUILD_CLIENT": "ON" },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
+      "name": "linux-server",
+      "displayName": "Server (Linux, 32-bit: open.mp and SA-MP)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "VOICE_BRIDGE_BUILD_32BIT": "ON",
+        "VOICE_BRIDGE_BUILD_SERVER": "ON",
+        "VOICE_BRIDGE_BUILD_CLIENT": "OFF"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-server", "configurePreset": "windows-server", "configuration": "Release" },
+    { "name": "windows-client", "configurePreset": "windows-client", "configuration": "Release" },
+    { "name": "linux-server", "configurePreset": "linux-server" }
+  ],
+  "testPresets": [
+    { "name": "windows-server", "configurePreset": "windows-server", "configuration": "Release", "output": { "outputOnFailure": true } },
+    { "name": "linux-server", "configurePreset": "linux-server", "output": { "outputOnFailure": true } }
+  ]
+}

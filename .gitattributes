@@ -1,0 +1,10 @@
+* text=auto eol=lf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+# Pawn sources in Portuguese are Windows-1252 (the encoding SA-MP displays).
+*.pwn text eol=lf
+*.inc text eol=lf
+*.amx binary
+*.dll binary
+*.so binary
+*.asi binary

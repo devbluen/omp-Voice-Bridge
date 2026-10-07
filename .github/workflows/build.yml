@@ -1,0 +1,193 @@
+name: Build Voice Bridge
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to embed (empty = VERSION file)"
+        required: false
+        type: string
+        default: ""
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to embed (empty = VERSION file)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  BUILD_TYPE: Release
+  RELEASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  server-linux:
+    name: Server (Linux x86)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          version="${RELEASE_VERSION:-$(tr -d '[:space:]' < VERSION)}"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Voice Bridge $version"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-multilib g++-multilib cmake ninja-build file
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DVOICE_BRIDGE_VERSION="$RELEASE_VERSION" \
+            -DVOICE_BRIDGE_BUILD_32BIT=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Verify binary
+        run: |
+          set -euo pipefail
+          plugin=build/plugins/voice-bridge.so
+          file "$plugin" | tee /dev/stderr | grep -q "ELF 32-bit"
+          for symbol in ComponentEntryPoint Supports Load Unload AmxLoad AmxUnload ProcessTick; do
+            nm -D --defined-only "$plugin" | grep -qw "$symbol" || { echo "missing export $symbol"; exit 1; }
+          done
+          if readelf -d "$plugin" | grep -Eq 'libstdc\+\+|libgcc_s|libatomic'; then
+            echo "the C++ runtime must be linked statically"; readelf -d "$plugin"; exit 1
+          fi
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          root=package/voice-bridge
+          mkdir -p "$root/components" "$root/plugins" "$root/include" artifacts
+          cp build/plugins/voice-bridge.so "$root/components/"
+          cp build/plugins/voice-bridge.so "$root/plugins/"
+          cp include/*.inc "$root/include/"
+          cp LICENSE "$root/"
+          cp packaging/SERVER-README.txt "$root/README.txt"
+          archive="artifacts/voice-bridge-server-linux-x86-${RELEASE_VERSION}.tar.gz"
+          tar -czf "$archive" -C package voice-bridge
+          sha256sum "$archive" > "$archive.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-bridge-server-linux-x86
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  server-windows:
+    name: Server (Windows x86)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          version="${RELEASE_VERSION:-$(tr -d '[:space:]' < VERSION)}"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Voice Bridge $version"
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A Win32 -DVOICE_BRIDGE_VERSION="$env:RELEASE_VERSION"
+
+      - name: Build
+        run: cmake --build build --config $env:BUILD_TYPE --parallel
+
+      - name: Test
+        run: ctest --test-dir build -C $env:BUILD_TYPE --output-on-failure
+
+      - name: Verify exports
+        run: |
+          $dll = "build\plugins\$env:BUILD_TYPE\voice-bridge.dll"
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x86' } | Select-Object -First 1
+          $exports = & $dumpbin.FullName /exports $dll | Out-String
+          foreach ($symbol in "ComponentEntryPoint", "Supports", "Load", "Unload", "AmxLoad", "AmxUnload", "ProcessTick") {
+            if ($exports -notmatch "\b$symbol\b") { throw "missing export $symbol" }
+          }
+
+      - name: Package
+        run: |
+          $root = "package\voice-bridge"
+          New-Item -ItemType Directory -Force "$root\components", "$root\plugins", "$root\include", "artifacts" | Out-Null
+          Copy-Item "build\plugins\$env:BUILD_TYPE\voice-bridge.dll" "$root\components\"
+          Copy-Item "build\plugins\$env:BUILD_TYPE\voice-bridge.dll" "$root\plugins\"
+          Copy-Item include\*.inc "$root\include\"
+          Copy-Item LICENSE "$root\"
+          Copy-Item packaging\SERVER-README.txt "$root\README.txt"
+          $archive = "artifacts\voice-bridge-server-windows-x86-$env:RELEASE_VERSION.zip"
+          Compress-Archive -Path "$root" -DestinationPath $archive
+          (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() | Out-File "$archive.sha256" -Encoding ascii
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-bridge-server-windows-x86
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
+
+  client:
+    name: Client (voice-bridge.asi)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          version="${RELEASE_VERSION:-$(tr -d '[:space:]' < VERSION)}"
+          echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Voice Bridge $version"
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A Win32 -DVOICE_BRIDGE_BUILD_SERVER=OFF -DVOICE_BRIDGE_BUILD_CLIENT=ON -DVOICE_BRIDGE_VERSION="$env:RELEASE_VERSION"
+
+      - name: Build
+        run: cmake --build build --config $env:BUILD_TYPE --target voice-bridge-client --parallel
+
+      - name: Package
+        run: |
+          $root = "package\voice-bridge-client"
+          New-Item -ItemType Directory -Force $root, "artifacts" | Out-Null
+          Copy-Item "build\client\$env:BUILD_TYPE\voice-bridge.asi" "$root\"
+          Copy-Item packaging\CLIENT-README.txt "$root\LEIA-ME.txt"
+          Copy-Item LICENSE "$root\"
+          $archive = "artifacts\voice-bridge-client-$env:RELEASE_VERSION.zip"
+          Compress-Archive -Path "$root\*" -DestinationPath $archive
+          (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower() | Out-File "$archive.sha256" -Encoding ascii
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-bridge-client
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 14
