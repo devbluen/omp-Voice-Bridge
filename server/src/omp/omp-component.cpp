@@ -143,7 +143,7 @@ void VoiceBridgeComponent::onInit(IComponentList* components)
 	const vbs::Config config = vbs::LoadConfig(source);
 	active_ = vbs::VoiceServer::Get().start(config, this, this, &vbs::PawnHost::Get());
 	started_ = true;
-	vbs::LogInfo("Voice Bridge %s loaded (open.mp component)", VOICE_BRIDGE_VERSION);
+	vbs::LogInfo("Voice Bridge %s loaded (open.mp component) - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
 }
 
 void VoiceBridgeComponent::onReady()

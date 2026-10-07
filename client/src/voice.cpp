@@ -93,8 +93,11 @@ uint32_t resolve(const std::string& host)
 
 VoiceClient& VoiceClient::Get()
 {
-	static VoiceClient instance;
-	return instance;
+	// Never destroyed: on exit (/q) Windows has already killed the UDP thread
+	// and destroying a std::thread that was running calls std::terminate,
+	// which SA-MP reports as a crash.  The OS frees everything anyway.
+	static VoiceClient* instance = new VoiceClient();
+	return *instance;
 }
 
 
@@ -1045,8 +1048,15 @@ VoiceStatus VoiceClient::status() const
 
 std::string VoiceClient::playerName(uint16_t player) const
 {
+	// Voice Bridge servers send names; on SampVoice servers they come from
+	// the game's player list.
 	const auto it = names_.find(player);
-	return it != names_.end() && !it->second.empty() ? it->second : "Player " + std::to_string(player);
+	if (it != names_.end() && !it->second.empty())
+	{
+		return it->second;
+	}
+	std::string name;
+	return samp::PlayerName(player, name) ? name : "Player " + std::to_string(player);
 }
 
 std::vector<Notification> VoiceClient::notifications()

@@ -60,3 +60,8 @@ PAWN
 PLAYERS
   Both voice-bridge.asi (Voice Bridge) and sampvoice.asi (SampVoice) work.
   To accept only one: voice_allow_sampvoice / voice_allow_voicebridge.
+
+==========================================================================
+
+Voice Bridge - by devbluen
+https://github.com/devbluen/omp-Voice-Bridge

@@ -72,6 +72,8 @@ jobs:
           {
             echo "## Voice Bridge v${VERSION}"
             echo
+            echo "By [devbluen](https://github.com/devbluen)."
+            echo
             echo "### Players"
             echo "Download \`voice-bridge-client-${VERSION}.zip\` and copy \`voice-bridge.asi\` into the GTA San Andreas folder."
             echo "Works with SA-MP 0.3.7 R1/R2/R3/R4/R5 and 0.3.DL, on Voice Bridge and SampVoice servers."

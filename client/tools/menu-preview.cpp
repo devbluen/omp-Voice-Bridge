@@ -56,6 +56,7 @@ bool saveBitmap(IDirect3DDevice9* device, const std::string& path, UINT width, U
 int main(int argc, char** argv)
 {
 	const std::string folder = argc > 1 ? argv[1] : ".";
+	const bool portuguese = !(argc > 2 && std::string(argv[2]) == "en"); // usage: menu-preview [folder] [en]
 	const UINT width = 1280;
 	const UINT height = 720;
 	WNDCLASSA windowClass {};
@@ -80,13 +81,13 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	const char* names[] = { "status", "sound", "microphone", "players", "interface" };
-	for (int page = 0; page < 5; ++page)
+	const char* names[] = { "status", "sound", "microphone", "players", "interface", "about" };
+	for (int page = 0; page < 6; ++page)
 	{
 		for (int frame = 0; frame < 4; ++frame)
 		{
 			device->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_XRGB(70, 92, 110), 1.f, 0);
-			vbc::overlay::PreviewFrame(device, page, true);
+			vbc::overlay::PreviewFrame(device, page, portuguese);
 		}
 		const std::string path = folder + "\\menu-" + names[page] + ".bmp";
 		std::printf("%s %s\n", path.c_str(), saveBitmap(device, path, width, height) ? "ok" : "FAILED");
