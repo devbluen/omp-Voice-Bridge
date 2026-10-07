@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <string>
+
 #include <cstddef>
 #include <cstdint>
 #include <windows.h>
@@ -52,6 +54,8 @@ bool SetCursor(bool visible);
 // Positions of remote entities, used when the server does not send them
 // (SampVoice servers).
 bool PlayerPosition(uint16_t player, float out[3]);
+// Nick of a player from samp.dll's player pool (servers that do not send names).
+bool PlayerName(uint16_t player, std::string& out);
 bool VehiclePosition(uint16_t vehicle, float out[3]);
 bool ObjectPosition(uint16_t object, float out[3]);
 }

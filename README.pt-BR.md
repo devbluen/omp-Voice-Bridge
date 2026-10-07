@@ -2,13 +2,13 @@
 
 Chat de voz para servidores **open.mp** e **SA-MP**, com client próprio e **compatível com o SampVoice**.
 
-[English](README.md)
+Criado por **[devbluen](https://github.com/devbluen)** · [Repositório](https://github.com/devbluen/omp-Voice-Bridge) · [Releases](https://github.com/devbluen/omp-Voice-Bridge/releases) · [English](README.md)
 
 | | |
 |---|---|
 | **Servidor** | Um único arquivo funciona como componente do open.mp e como plugin do SA-MP (0.3.7-R2 e 0.3.DL), no Windows e no Linux. |
 | **Client** | Um único `voice-bridge.asi` para SA-MP 0.3.7 R1, R2, R3, R4, R5 e 0.3.DL. Sem instalador. |
-| **SampVoice** | Quem usa `sampvoice.asi` funciona no Voice Bridge, o `voice-bridge.asi` funciona em servidores SampVoice e gamemodes com natives `Sv*` rodam sem alterações. |
+| **SampVoice** | Quem usa `sampvoice.asi` funciona no Voice Bridge, o `voice-bridge.asi` funciona em servidores SampVoice (3.x e o porte para open.mp) e gamemodes com natives `Sv*` rodam sem alterações. |
 | **Conexão** | Porta de voz fixa e configurável. Se o UDP estiver bloqueado, a voz passa pela própria conexão do jogo (túnel). |
 | **Áudio** | Som 3D a partir do personagem (direção, distância e eco do ambiente), efeitos (rádio, telefone, megafone...) e volume por jogador. |
 | **Segurança** | Chave por jogador presa ao IP do jogo, bloqueio automático de quem envia pacotes inválidos e nenhum IP/porta exposto no client. |
@@ -335,7 +335,8 @@ Outros: `VB_IsValidEffect(effect)`. Efeitos e streams são liberados sozinhos qu
 | Som | Volume, som 3D (realista, estéreo simples ou desligado), eco do ambiente, queda com a distância, direção pelo personagem ou pela câmera, inverter canais e bipe da tecla de falar. |
 | Microfone | Dispositivo, ganho, filtro de ruído, medidor, teste e ativação por voz (se o servidor permitir). |
 | Jogadores | Volume e silenciar por jogador. |
-| Interface | Tamanho, posição do ícone do microfone (ou arraste o ícone com o menu aberto) e tecla do menu. |
+| Interface | Idioma (automático, English ou Português), tamanho, posição do ícone do microfone (ou arraste o ícone com o menu aberto) e tecla do menu. |
+| Sobre | Versão, link do projeto e créditos. |
 
 As opções ficam no `voicebridge.ini`, na pasta do GTA. O `voicebridge.log` registra a versão do samp.dll detectada e erros de áudio, sem IP nem porta.
 
@@ -420,5 +421,12 @@ dist/
 - Controle pelo pacote RakNet 222 (formato do SampVoice + extensões a partir de `0x100`). Voz por UDP com o cabeçalho de 24 bytes do SampVoice (CRC32C) e Opus 48 kHz.
 - No SA-MP o plugin intercepta o `RakServer` por padrão de bytes (0.3.7/0.3.DL) e lê posições chamando as natives do próprio servidor. No open.mp usa o SDK.
 - O client usa a `bass.dll` do SA-MP e renderiza o som 3D a partir do personagem: diferença de tempo e de timbre entre os ouvidos, perda de agudos com a distância e eco do ambiente.
+
+## Créditos
+
+- **Voice Bridge**: criado por [devbluen](https://github.com/devbluen). Código, issues e releases em [github.com/devbluen/omp-Voice-Bridge](https://github.com/devbluen/omp-Voice-Bridge).
+- **MMV (Ramon)**: testes e ideias.
+- **SampVoice**: protocolo e API originais de MOR (CyberMor), seguidos para manter a compatibilidade; porte para open.mp por AmyrAhmady (iAmir).
+- Bibliotecas: [Opus](https://opus-codec.org), [Dear ImGui](https://github.com/ocornut/imgui), BASS (já vem com o SA-MP) e o SDK do open.mp.
 
 Licença: MIT.

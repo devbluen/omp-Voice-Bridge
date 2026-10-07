@@ -6,6 +6,8 @@
 
 // Generated from the CMake project version.
 #define VOICE_BRIDGE_VERSION "@PROJECT_VERSION@"
+#define VOICE_BRIDGE_AUTHOR "devbluen"
+#define VOICE_BRIDGE_URL "https://github.com/devbluen/omp-Voice-Bridge"
 #define VOICE_BRIDGE_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
 #define VOICE_BRIDGE_VERSION_MINOR @PROJECT_VERSION_MINOR@
 #define VOICE_BRIDGE_VERSION_PATCH @PROJECT_VERSION_PATCH@

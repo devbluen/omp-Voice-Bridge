@@ -22,6 +22,7 @@ struct Settings
 	bool showMicIcon = true;
 	int uiScale = 100; // %
 	int menuKey = 0x7A; // VK_F11: opens the voice menu
+	int language = 0; // 0 follows Windows, 1 English, 2 Portuguese
 
 	// 3D audio
 	int spatialMode = 0; // 0 realistic, 1 simple stereo, 2 off

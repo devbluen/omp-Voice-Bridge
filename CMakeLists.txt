@@ -28,7 +28,11 @@ if(VOICE_BRIDGE_BUILD_32BIT AND NOT WIN32)
 	set(CMAKE_CXX_FLAGS_INIT "${CMAKE_CXX_FLAGS_INIT} -m32")
 endif()
 
-project(voice-bridge LANGUAGES C CXX VERSION ${VOICE_BRIDGE_VERSION})
+project(voice-bridge LANGUAGES C CXX VERSION ${VOICE_BRIDGE_VERSION}
+	DESCRIPTION "Voice chat for open.mp and SA-MP, compatible with SampVoice"
+	HOMEPAGE_URL "https://github.com/devbluen/omp-Voice-Bridge")
+set(VOICE_BRIDGE_AUTHOR_RC "devbluen")
+set(VOICE_BRIDGE_URL_RC "${PROJECT_HOMEPAGE_URL}")
 
 # The open.mp SDK ships older third-party CMakeLists.
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)

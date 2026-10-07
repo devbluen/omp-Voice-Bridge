@@ -14,14 +14,15 @@ BEGIN
 	BEGIN
 		BLOCK "040904b0"
 		BEGIN
-			VALUE "CompanyName", "Voice Bridge"
+			VALUE "CompanyName", "@VOICE_BRIDGE_AUTHOR_RC@"
 			VALUE "FileDescription", "@VB_RC_DESCRIPTION@"
 			VALUE "FileVersion", "@PROJECT_VERSION@"
 			VALUE "InternalName", "voice-bridge"
 			VALUE "OriginalFilename", "@VB_RC_FILENAME@"
 			VALUE "ProductName", "Voice Bridge"
 			VALUE "ProductVersion", "@PROJECT_VERSION@"
-			VALUE "LegalCopyright", "MIT License"
+			VALUE "LegalCopyright", "MIT License - @VOICE_BRIDGE_AUTHOR_RC@"
+			VALUE "Comments", "@VOICE_BRIDGE_URL_RC@"
 		END
 	END
 	BLOCK "VarFileInfo"

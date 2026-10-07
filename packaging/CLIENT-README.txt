@@ -54,3 +54,8 @@ TROUBLESHOOTING
   Can't hear anyone    check the volume in F11 > Sound
   Details              voicebridge.log in the GTA folder
   Settings             voicebridge.ini (delete it to reset)
+
+==========================================================================
+
+Voice Bridge - by devbluen
+https://github.com/devbluen/omp-Voice-Bridge

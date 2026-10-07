@@ -136,8 +136,10 @@ float Audio::Parameter::value(uint64_t time) const
 
 Audio& Audio::Get()
 {
-	static Audio instance;
-	return instance;
+	// Never destroyed (see VoiceClient::Get): at process exit bass.dll may
+	// already be gone and its threads killed.
+	static Audio* instance = new Audio();
+	return *instance;
 }
 
 bool Audio::init(HWND window)

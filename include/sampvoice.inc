@@ -1,5 +1,6 @@
 /*
  *  SampVoice 3.1 compatible include, provided by Voice Bridge.
+ *  by devbluen - https://github.com/devbluen/omp-Voice-Bridge
  *
  *  Gamemodes written for SampVoice keep working unchanged with the Voice
  *  Bridge plugin: replace the old sampvoice.inc with this file (or keep the

@@ -1,5 +1,6 @@
 /*
  *  Voice Bridge - voice chat for open.mp and SA-MP
+ *  by devbluen - https://github.com/devbluen/omp-Voice-Bridge
  *  Include after <open.mp> or <a_samp>.  Docs: README.md
  */
 

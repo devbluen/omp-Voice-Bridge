@@ -47,6 +47,14 @@ bool g_audioReady = false;
 std::atomic<bool> g_menu { false };
 bool g_cursorByUs = false;
 bool g_portuguese = false;
+bool g_systemPortuguese = false;
+
+// Settings::language: 0 = follow Windows, 1 = English, 2 = Portuguese.
+void applyLanguage()
+{
+	const int language = GetSettings().language;
+	g_portuguese = language == 2 || (language == 0 && g_systemPortuguese);
+}
 int g_menuKeyWasDown = 0;
 
 // --- Text -----------------------------------------------------------------
@@ -280,6 +288,7 @@ enum class Page
 	Microphone,
 	Players,
 	Interface,
+	About,
 };
 
 struct RecentSpeaker
@@ -292,6 +301,7 @@ struct RecentSpeaker
 Page g_page = Page::Status;
 bool g_previewMode = false;
 bool g_waitingKey = false;
+uint64_t g_linkCopiedAt = 0;
 ImFont* g_titleFont = nullptr;
 std::map<uint16_t, RecentSpeaker> g_recent;
 
@@ -486,6 +496,31 @@ void pageStatus(const VoiceStatus& status)
 	infoRow(tr("Push to talk", "Tecla para falar"), keys.empty() ? tr("defined by the server", "definida pelo servidor") : keys);
 }
 
+void pageAbout()
+{
+	sectionTitle("Voice Bridge");
+	infoRow(tr("Version", "Versão"), "v" VOICE_BRIDGE_VERSION);
+	infoRow(tr("Works with", "Funciona com"), tr("Voice Bridge and SampVoice servers", "servidores Voice Bridge e SampVoice"));
+	ImGui::Spacing();
+	ImGui::TextColored(kMuted, "%s", VOICE_BRIDGE_URL);
+	ImGui::SameLine();
+	if (ImGui::SmallButton(tr("Copy link", "Copiar link")))
+	{
+		ImGui::SetClipboardText(VOICE_BRIDGE_URL);
+		g_linkCopiedAt = GetTickCount64();
+	}
+	if (g_linkCopiedAt && GetTickCount64() - g_linkCopiedAt < 2000)
+	{
+		ImGui::SameLine();
+		ImGui::TextColored(kGood, "%s", tr("copied", "copiado"));
+	}
+
+	sectionTitle(tr("Credits", "Créditos"));
+	infoRow(VOICE_BRIDGE_AUTHOR, tr("creator", "criador"));
+	infoRow("MMV (Ramon)", tr("testing and ideas", "testes e ideias"));
+	infoRow("MOR (CyberMor)", tr("original SampVoice protocol", "protocolo original do SampVoice"));
+}
+
 bool pageSound()
 {
 	Settings& settings = GetSettings();
@@ -645,6 +680,15 @@ bool pageInterface()
 {
 	Settings& settings = GetSettings();
 	bool changed = false;
+	sectionTitle(tr("Language", "Idioma"));
+	const char* languages[] = { tr("Automatic (system)", "Automático (sistema)"), "English", "Português (Brasil)" };
+	ImGui::SetNextItemWidth(-1.f);
+	if (ImGui::Combo("##language", &settings.language, languages, IM_ARRAYSIZE(languages)))
+	{
+		applyLanguage();
+		changed = true;
+	}
+
 	sectionTitle(tr("On screen", "Na tela"));
 	changed |= toggle(tr("Show who is talking", "Mostrar quem está falando"), &settings.showSpeakerList);
 	changed |= toggle(tr("Show the microphone icon", "Mostrar o ícone do microfone"), &settings.showMicIcon);
@@ -683,6 +727,7 @@ bool pageInterface()
 		const std::string device = settings.micDevice;
 		settings = Settings {};
 		settings.micDevice = device;
+		applyLanguage();
 		changed = true;
 	}
 	return changed;
@@ -770,6 +815,7 @@ void drawMenu(const VoiceStatus& status)
 	navButton(tr("   Microphone", "   Microfone"), Page::Microphone);
 	navButton(tr("   Players", "   Jogadores"), Page::Players);
 	navButton(tr("   Interface", "   Interface"), Page::Interface);
+	navButton(tr("   About", "   Sobre"), Page::About);
 	ImGui::SetCursorPosY(ImGui::GetWindowHeight() - 44.f);
 	ImGui::TextColored(kMuted, "%s / Esc %s", keyName(static_cast<uint8_t>(GetSettings().menuKey)).c_str(), tr("closes", "fecha"));
 	ImGui::EndChild();
@@ -786,6 +832,7 @@ void drawMenu(const VoiceStatus& status)
 		{ "Microphone", "Microfone" },
 		{ "Players", "Jogadores" },
 		{ "Interface", "Interface" },
+		{ "About", "Sobre" },
 	};
 	const auto& title = titles[static_cast<int>(g_page)];
 	if (g_titleFont)
@@ -821,6 +868,9 @@ void drawMenu(const VoiceStatus& status)
 		break;
 	case Page::Interface:
 		changed |= pageInterface();
+		break;
+	case Page::About:
+		pageAbout();
 		break;
 	}
 	ImGui::EndChild();
@@ -1068,7 +1118,8 @@ std::string moduleName(const void* address)
 
 bool Install()
 {
-	g_portuguese = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_PORTUGUESE;
+	g_systemPortuguese = PRIMARYLANGID(GetUserDefaultUILanguage()) == LANG_PORTUGUESE;
+	applyLanguage();
 	IDirect3DDevice9* device = nullptr;
 	for (int i = 0; i < 6000 && !device; ++i)
 	{
