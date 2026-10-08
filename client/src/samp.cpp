@@ -39,6 +39,9 @@ constexpr uint32_t kNone = 0xFFFFFFFFu;
 constexpr uint32_t kInputEnabled = 0x14E0;
 constexpr uint32_t kDialogActive = 0x28;
 constexpr uint32_t kEntityGameObject = 0x40;
+constexpr uint32_t kPedFlags = 0x46C; // CPed: bInVehicle is bit 8
+constexpr uint32_t kPedInVehicle = 0x100;
+constexpr uint32_t kPedVehicle = 0x58C;
 constexpr uint16_t kMaxPlayers = 1004;
 constexpr uint16_t kMaxVehicles = 2000;
 constexpr uint16_t kMaxObjects = 1000;
@@ -375,7 +378,18 @@ bool PlayerPosition(uint16_t player, float out[3])
 	uintptr_t gamePed = 0;
 	return players && Read(players + g_layout->playerPoolObjects + player * sizeof(uint32_t), info) && info
 		&& Read(info + g_layout->playerInfoPlayer, remote) && remote && Read(remote + g_layout->remotePlayerPed, ped) && ped
-		&& Read(ped + kEntityGameObject, gamePed) && gamePosition(gamePed, out);
+		&& Read(ped + kEntityGameObject, gamePed) && gamePosition(PedPlaceable(gamePed), out);
+}
+
+uintptr_t PedPlaceable(uintptr_t ped)
+{
+	uint32_t flags = 0;
+	uintptr_t vehicle = 0;
+	if (ped && Read(ped + kPedFlags, flags) && (flags & kPedInVehicle) && Read(ped + kPedVehicle, vehicle) && vehicle)
+	{
+		return vehicle;
+	}
+	return ped;
 }
 
 bool PlayerName(uint16_t player, std::string& out)

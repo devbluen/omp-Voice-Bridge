@@ -53,6 +53,10 @@ bool IsDialogActive();
 // Frees the mouse for the settings window (R1, R3, R5 and DL only).
 bool SetCursor(bool visible);
 
+// The entity that carries a GTA ped's position: its vehicle while it is inside
+// one (the ped's own matrix is not updated there), otherwise the ped itself.
+uintptr_t PedPlaceable(uintptr_t ped);
+
 // Positions of remote entities, used when the server does not send them
 // (SampVoice servers).
 bool PlayerPosition(uint16_t player, float out[3]);

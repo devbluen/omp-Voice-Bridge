@@ -110,7 +110,11 @@ Listener GetListener(bool characterOrientation)
 	Vec3 pedPosition;
 	Vec3 pedFront;
 	Vec3 pedUp;
-	const bool character = samp::Read(kPlayerPed, ped) && ped && entityPosition(ped, pedPosition);
+	if (samp::Read(kPlayerPed, ped))
+	{
+		ped = samp::PedPlaceable(ped); // inside a vehicle, use the vehicle's matrix
+	}
+	const bool character = ped && entityPosition(ped, pedPosition);
 	const bool characterAxes = character && samp::Read(ped + 0x14, pedMatrix) && pedMatrix && readVec(pedMatrix + 0x10, pedFront)
 		&& readVec(pedMatrix + 0x20, pedUp) && length(pedFront) > 0.5f && length(pedUp) > 0.5f;
 
