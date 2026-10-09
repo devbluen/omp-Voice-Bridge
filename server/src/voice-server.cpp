@@ -752,7 +752,7 @@ bool VoiceServer::setPlayerMicIcon(uint16_t player, bool visible)
 
 void VoiceServer::setVoiceGain(float gain)
 {
-	globalGain_ = std::clamp(gain, 0.f, 4.f);
+	globalGain_ = std::clamp(gain, 0.f, 20.f);
 }
 
 bool VoiceServer::setPlayerVoiceGain(uint16_t player, float gain)
@@ -762,7 +762,7 @@ bool VoiceServer::setPlayerVoiceGain(uint16_t player, float gain)
 		return false;
 	}
 	std::unique_lock<std::shared_mutex> lock(routeMutex_);
-	players_[player].voiceGain = std::clamp(gain, 0.f, 4.f);
+	players_[player].voiceGain = std::clamp(gain, 0.f, 20.f);
 	return true;
 }
 

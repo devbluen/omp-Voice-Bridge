@@ -686,6 +686,36 @@ void testVoiceGain()
 	const double ratio = std::sqrt(outEnergy / inEnergy);
 	std::printf("voice gain 2.0 -> measured %.2f\n", ratio);
 	CHECK(frames == 6 && ratio > 1.7 && ratio < 2.3);
+
+	// A high gain (10x) is limited, not wrapped around: the peak stays under
+	// full scale and the packet is still 100 ms.
+	vbs::VoiceGain loud;
+	opus_decoder_ctl(decoder, OPUS_RESET_STATE);
+	int peak = 0;
+	for (int packet = 0; packet < 4; ++packet)
+	{
+		for (int i = 0; i < 4800; ++i)
+		{
+			tone[i] = static_cast<int16_t>(4000.0 * std::sin(2.0 * 3.14159265 * 300.0 * (packet * 4800 + i) / 48000.0));
+		}
+		uint8_t in[1500];
+		const int size = opus_encode(encoder, tone.data(), 4800, in, sizeof(in));
+		uint8_t out[1400];
+		std::size_t written = 0;
+		CHECK(loud.apply(1, packet, 10.f, 32000, in, size, out, sizeof(out), written));
+		CHECK(opus_packet_get_nb_samples(out, static_cast<opus_int32>(written), 48000) == 4800);
+		std::vector<int16_t> pcm(4800);
+		CHECK(opus_decode(decoder, out, static_cast<opus_int32>(written), pcm.data(), 4800, 0) == 4800);
+		if (packet >= 2)
+		{
+			for (int16_t sample : pcm)
+			{
+				peak = std::max(peak, std::abs(static_cast<int>(sample)));
+			}
+		}
+	}
+	std::printf("voice gain 10.0 -> peak %d\n", peak);
+	CHECK(peak > 20000 && peak < 32767);
 	opus_encoder_destroy(encoder);
 	opus_decoder_destroy(decoder);
 }

@@ -14,19 +14,21 @@ namespace
 constexpr int kFrequency = 48000;
 constexpr int kMaxSamples = 5760; // 120 ms
 
-// Gain with a soft knee above 70% of full scale, so loud voices are not
-// clipped harshly.
+// Gain with a soft knee above 60% of full scale, so loud voices are not
+// clipped harshly.  The ceiling stays under full scale: Opus overshoots a
+// little when encoding a limited signal, which would clip on the clients.
 int16_t amplify(int16_t sample, float gain)
 {
 	const float value = static_cast<float>(sample) * gain;
 	const float magnitude = std::fabs(value);
-	constexpr float knee = 0.7f * 32767.f;
+	constexpr float knee = 0.6f * 32767.f;
+	constexpr float ceiling = 0.9f * 32767.f;
 	if (magnitude <= knee)
 	{
 		return static_cast<int16_t>(value);
 	}
-	const float over = (magnitude - knee) / (32767.f - knee);
-	const float limited = knee + (32767.f - knee) * std::tanh(over);
+	const float over = (magnitude - knee) / (ceiling - knee);
+	const float limited = knee + (ceiling - knee) * std::tanh(over);
 	return static_cast<int16_t>(value < 0.f ? -limited : limited);
 }
 }

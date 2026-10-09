@@ -235,7 +235,7 @@ Config LoadConfig(ConfigSource& source)
 	lookupString(source, publicHost, config.publicHost);
 	lookupBool(source, strictIp, config.strictIp);
 	readRanged(source, bitrate, config.bitrate, 6000, 128000, "voice_bitrate");
-	readRanged(source, gain, config.gainPercent, 0, 400, "voice_gain");
+	readRanged(source, gain, config.gainPercent, 0, 2000, "voice_gain");
 
 	int frame = config.frameMs;
 	if (lookupInt(source, frameMs, frame))
