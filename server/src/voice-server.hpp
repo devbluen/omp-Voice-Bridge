@@ -190,6 +190,9 @@ struct Player
 	std::set<uint8_t> keys;
 	std::vector<uint32_t> speakerStreams;
 	std::vector<uint32_t> listenerStreams;
+	// SampVoice listeners hear streams that follow a player as point streams
+	// moved by the server (last position sent, per stream).
+	std::map<uint32_t, vb::Vec3> legacyPoints;
 	std::bitset<kMaxPlayers> blocked;
 
 	bool talking = false;

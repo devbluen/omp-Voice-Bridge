@@ -20,6 +20,8 @@ constexpr uint64_t kUdpWarnAfterMs = 10000;
 constexpr uint64_t kProbeDelayMs = 1500;
 constexpr std::size_t kMaxTunnelQueue = 8192;
 constexpr std::size_t kPositionsPerPacket = 64;
+// Movement (metres) before a SampVoice listener gets a new point position.
+constexpr float kLegacyPointStep = 0.4f;
 
 // voice_log_file: empty = logs/voice-bridge.log (open.mp has a logs folder),
 // else voice-bridge.log next to the server; "off" disables the file.
@@ -1210,12 +1212,28 @@ void VoiceServer::sendParameter(const Stream& stream, uint8_t parameter, const P
 
 void VoiceServer::sendStreamState(const Stream& stream, uint16_t player)
 {
-	const std::vector<uint8_t> create = createPacketFor(stream);
-	uint16_t type;
-	std::memcpy(&type, create.data(), sizeof(type));
-	queueControl(player, type, create.data() + sizeof(type), create.size() - sizeof(type));
+	Player& p = players_[player];
+	Pose pose;
+	if (!p.extended && StreamTarget(stream.type) == TargetKind::Player && sourcePose(stream, pose))
+	{
+		// The SampVoice client places a "stream at player" at that player's
+		// ped matrix, which GTA does not update inside a vehicle: the voice
+		// went silent as soon as the speaker got in a car.  It gets a point
+		// stream instead, kept at the server's position (tickPositions).
+		std::vector<uint8_t> payload;
+		append(payload, vb::CreateLPStreamPacket { stream.id, stream.distance, pose.position, stream.color });
+		appendString(payload, stream.name);
+		queueControl(player, vb::ctl::createLPStream, payload);
+		p.legacyPoints[stream.id] = pose.position;
+	}
+	else
+	{
+		const std::vector<uint8_t> create = createPacketFor(stream);
+		uint16_t type;
+		std::memcpy(&type, create.data(), sizeof(type));
+		queueControl(player, type, create.data() + sizeof(type), create.size() - sizeof(type));
+	}
 
-	const Player& p = players_[player];
 	if (p.extended)
 	{
 		uint32_t flags = stream.flags;
@@ -1857,6 +1875,38 @@ void VoiceServer::tickPositions()
 		out = pose.position;
 		return ok;
 	};
+
+	for (uint16_t id = 0; id < kMaxPlayers; ++id)
+	{
+		Player& legacy = players_[id];
+		if (!legacy.plugin || legacy.extended || legacy.legacyPoints.empty())
+		{
+			continue;
+		}
+		for (auto it = legacy.legacyPoints.begin(); it != legacy.legacyPoints.end();)
+		{
+			const Stream* stream = findStream(it->first);
+			if (!stream || !stream->listenerMask.test(id))
+			{
+				it = legacy.legacyPoints.erase(it);
+				continue;
+			}
+			vb::Vec3 position {};
+			if (lookup(*stream, position))
+			{
+				const float mx = position.x - it->second.x;
+				const float my = position.y - it->second.y;
+				const float mz = position.z - it->second.z;
+				if (mx * mx + my * my + mz * mz > kLegacyPointStep * kLegacyPointStep)
+				{
+					it->second = position;
+					const vb::UpdateLPStreamPositionPacket packet { stream->id, position };
+					queueControl(id, vb::ctl::updateLPStreamPosition, &packet, sizeof(packet));
+				}
+			}
+			++it;
+		}
+	}
 
 	for (uint16_t id = 0; id < kMaxPlayers; ++id)
 	{

@@ -404,6 +404,7 @@ void testDynamicStreams()
 	config.gamePort = 65535;
 	config.bind = "127.0.0.1";
 	config.streamTickMs = 20;
+	config.positionRateMs = 20;
 	VoiceServer& server = VoiceServer::Get();
 	CHECK(server.start(config, &transport, &world, &events));
 
@@ -431,6 +432,32 @@ void testDynamicStreams()
 	CHECK(!server.hasListener(stream, 1));
 	CHECK(server.hasListener(stream, 2));
 	CHECK(transport.controls(1, vb::ctl::deleteStream).size() == 1);
+
+	// SampVoice places a "stream at player" at the ped matrix, which GTA
+	// leaves stale inside vehicles: SampVoice listeners get a point stream
+	// that the server moves with the speaker instead.
+	CHECK(transport.controls(2, vb::ctl::createLStreamAtPlayer).empty());
+	const auto points = transport.controls(2, vb::ctl::createLPStream);
+	CHECK(points.size() == 1);
+	if (!points.empty())
+	{
+		vb::CreateLPStreamPacket point {};
+		std::memcpy(&point, points[0].data(), sizeof(point));
+		CHECK(point.stream == stream && point.position.x == 0.f && point.distance == 20.f);
+	}
+	world.players[0].position = { 4.f, 1.f, 0.f }; // the speaker drives away a bit
+	pump(80);
+	const auto moves = transport.controls(2, vb::ctl::updateLPStreamPosition);
+	CHECK(!moves.empty());
+	if (!moves.empty())
+	{
+		vb::UpdateLPStreamPositionPacket move {};
+		std::memcpy(&move, moves.back().data(), sizeof(move));
+		CHECK(move.stream == stream && move.position.x == 4.f && move.position.y == 1.f);
+	}
+	const std::size_t sent = moves.size();
+	pump(80); // standing still: no more updates
+	CHECK(transport.controls(2, vb::ctl::updateLPStreamPosition).size() == sent);
 
 	CHECK(server.setStreamMaxListeners(stream, 1));
 	world.players[1].position.x = 2.f;

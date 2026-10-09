@@ -355,7 +355,19 @@ bool VoiceBridgeComponent::playerPose(uint16_t player, vbs::Pose& out)
 	{
 		return false;
 	}
-	const Vector3 position = target->getPosition();
+	Vector3 position = target->getPosition();
+	// Inside a vehicle the vehicle is where the player is (same rule as the
+	// game itself), whatever the player sync last reported.
+	if (vehicles_)
+	{
+		if (IPlayerVehicleData* data = queryExtension<IPlayerVehicleData>(*target))
+		{
+			if (IVehicle* vehicle = data->getVehicle())
+			{
+				position = vehicle->getPosition();
+			}
+		}
+	}
 	out.position = { position.x, position.y, position.z };
 	out.world = target->getVirtualWorld();
 	out.interior = static_cast<int>(target->getInterior());
