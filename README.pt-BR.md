@@ -83,6 +83,7 @@ voice_bitrate 24000
 | config.json | server.cfg | Padrão | Descrição |
 |---|---|---|---|
 | `bitrate` | `voice_bitrate` | 24000 | Bitrate do Opus (6000-128000). |
+| `gain` | `voice_gain` | 100 | Volume de todas as vozes, em % (0-400). Acima de 100 o servidor amplifica o próprio áudio (os clients não passam de 100%). Por jogador: `VB_SetPlayerVoiceGain`. |
 | `frame_ms` | `voice_frame_ms` | 100 | Quadro dos clients Voice Bridge: 20, 40, 60 ou 100. O client SampVoice só toca 100. |
 | `stream_tick_ms` | `voice_stream_tick_ms` | 100 | Atualização dos streams dinâmicos. |
 | `position_rate_ms` | `voice_position_rate_ms` | 100 | Envio de posições aos clients Voice Bridge. |
@@ -96,6 +97,7 @@ voice_bitrate 24000
 | `allow_voice_activation` | `voice_allow_voice_activation` | false | Permite falar por ativação de voz (sem segurar a tecla). |
 | `show_speaker_list` | `voice_show_speaker_list` | true | Mostra quem está falando. |
 | `show_mic_icon` | `voice_show_mic_icon` | true | Mostra o ícone do microfone. |
+| `show_head_icons` | `voice_show_head_icons` | true | Mostra o microfone na cabeça de quem está falando (client Voice Bridge; por jogador: `VB_SetPlayerHeadIcons`). |
 
 **Segurança e diagnóstico**
 
@@ -230,6 +232,7 @@ Handles de stream e efeito são inteiros; `0` é inválido. Handles do SampVoice
 | `VB_GetVoicePort()` | Porta UDP de voz. |
 | `VB_SetDebug(bool:enabled)` | Log detalhado. |
 | `VB_SetBitrate(bitrate)` / `VB_GetBitrate()` | Bitrate para quem conectar depois. |
+| `VB_SetVoiceGain(Float:gain)` / `Float:VB_GetVoiceGain()` | Volume de todas as vozes (1.0 = normal, até 4.0). |
 | `VB_AllowClientType(type, bool:allowed)` / `VB_IsClientTypeAllowed(type)` | Quais clients podem usar a voz. |
 
 ### Jogadores: client
@@ -262,7 +265,8 @@ Handles de stream e efeito são inteiros; `0` é inválido. Handles do SampVoice
 |---|---|
 | `VB_BlockSpeaker(listenerid, speakerid, bool:block)` / `VB_IsSpeakerBlocked` | `listenerid` deixa de ouvir `speakerid`. |
 | `VB_SetSpeakerVolume(listenerid, speakerid, Float:volume)` | Volume de um jogador só para outro. |
-| `VB_SetPlayerSpeakerList` / `VB_SetPlayerMicIcon` / `VB_SetPlayerVoiceActivation` | Opções do client por jogador. |
+| `VB_SetPlayerVoiceGain(playerid, Float:gain)` / `Float:VB_GetPlayerVoiceGain(playerid)` | Volume da voz desse jogador para todos (até 4.0; para microfones baixos). |
+| `VB_SetPlayerSpeakerList` / `VB_SetPlayerMicIcon` / `VB_SetPlayerHeadIcons` / `VB_SetPlayerVoiceActivation` | Opções do client por jogador. |
 | `VB_Notify(playerid, text[], color, duration)` | Notificação na tela. |
 
 ### Streams
@@ -337,7 +341,7 @@ Outros: `VB_IsValidEffect(effect)`. Efeitos e streams são liberados sozinhos qu
 | Som | Volume, som 3D (realista, estéreo simples ou desligado), eco do ambiente, queda com a distância, direção pelo personagem ou pela câmera, inverter canais e bipe da tecla de falar. |
 | Microfone | Dispositivo, ganho, filtro de ruído, medidor, teste e ativação por voz (se o servidor permitir). |
 | Jogadores | Volume e silenciar por jogador. |
-| Interface | Idioma (automático, English ou Português), tamanho, posição do ícone do microfone (ou arraste o ícone com o menu aberto) e tecla do menu. |
+| Interface | Idioma (automático, English ou Português), microfone na cabeça de quem fala, tamanho, posição do ícone do microfone (ou arraste o ícone com o menu aberto) e tecla do menu. |
 | Sobre | Versão, link do projeto e créditos. |
 
 As opções ficam no `voicebridge.ini`, na pasta do GTA. O `voicebridge.log` registra a versão do samp.dll detectada e erros de áudio, sem IP nem porta.

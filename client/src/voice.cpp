@@ -313,6 +313,7 @@ void VoiceClient::handleControl(uint16_t type, const uint8_t* p, std::size_t siz
 			allowVoiceActivation_ = config.allowVoiceActivation != 0;
 			showSpeakerList_ = config.showSpeakerList != 0;
 			showMicIcon_ = config.showMicIcon != 0;
+			showHeadIcons_ = config.hideHeadIcons == 0;
 		}
 		break;
 	}
@@ -818,6 +819,7 @@ void VoiceClient::resetSession()
 	allowVoiceActivation_ = false;
 	showSpeakerList_ = true;
 	showMicIcon_ = true;
+	showHeadIcons_ = true;
 	keys_.clear();
 	pressed_.clear();
 	vadKeyDown_ = false;
@@ -1078,6 +1080,7 @@ VoiceStatus VoiceClient::status() const
 	s.allowVoiceActivation = allowVoiceActivation_;
 	s.showSpeakerList = showSpeakerList_;
 	s.showMicIcon = showMicIcon_;
+	s.showHeadIcons = showHeadIcons_;
 	s.keys.assign(keys_.begin(), keys_.end());
 	return s;
 }

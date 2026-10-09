@@ -164,6 +164,23 @@ Listener GetListener(bool characterOrientation)
 	return listener;
 }
 
+bool WorldToScreen(const Vec3& world, float& x, float& y, float& depth)
+{
+	using CalcScreenCoors = bool(__cdecl*)(const Vec3&, Vec3*, float*, float*, bool, bool);
+	static const auto calc = reinterpret_cast<CalcScreenCoors>(0x70CE30);
+	Vec3 screen;
+	float width = 0.f;
+	float height = 0.f;
+	if (!calc(world, &screen, &width, &height, true, true))
+	{
+		return false;
+	}
+	x = screen.x;
+	y = screen.y;
+	depth = screen.z;
+	return std::isfinite(x) && std::isfinite(y);
+}
+
 bool IsMenuActive()
 {
 	uint8_t active = 0;

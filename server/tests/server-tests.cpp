@@ -6,6 +6,9 @@
 
 #include "voice-server.hpp"
 #include "log.hpp"
+#include "voice-gain.hpp"
+#include <opus.h>
+#include <cmath>
 #include <iterator>
 #include <fstream>
 #include <chrono>
@@ -442,31 +445,10 @@ void testDynamicStreams()
 	CHECK(server.hasListener(stream, 2));
 	CHECK(transport.controls(1, vb::ctl::deleteStream).size() == 1);
 
-	// SampVoice places a "stream at player" at the ped matrix, which GTA
-	// leaves stale inside vehicles: SampVoice listeners get a point stream
-	// that the server moves with the speaker instead.
-	CHECK(transport.controls(2, vb::ctl::createLStreamAtPlayer).empty());
-	const auto points = transport.controls(2, vb::ctl::createLPStream);
-	CHECK(points.size() == 1);
-	if (!points.empty())
-	{
-		vb::CreateLPStreamPacket point {};
-		std::memcpy(&point, points[0].data(), sizeof(point));
-		CHECK(point.stream == stream && point.position.x == 0.f && point.distance == 20.f);
-	}
-	world.players[0].position = { 4.f, 1.f, 0.f }; // the speaker drives away a bit
-	pump(80);
-	const auto moves = transport.controls(2, vb::ctl::updateLPStreamPosition);
-	CHECK(!moves.empty());
-	if (!moves.empty())
-	{
-		vb::UpdateLPStreamPositionPacket move {};
-		std::memcpy(&move, moves.back().data(), sizeof(move));
-		CHECK(move.stream == stream && move.position.x == 4.f && move.position.y == 1.f);
-	}
-	const std::size_t sent = moves.size();
-	pump(80); // standing still: no more updates
-	CHECK(transport.controls(2, vb::ctl::updateLPStreamPosition).size() == sent);
+	// On foot a SampVoice listener gets the original "stream at player" (its
+	// speaker icon above the head is only drawn for that type).
+	CHECK(transport.controls(2, vb::ctl::createLStreamAtPlayer).size() == 1);
+	CHECK(transport.controls(2, vb::ctl::createLPStream).empty());
 
 	// Vehicle diagnostics: entering a vehicle is logged with what the player
 	// hears, and the console report describes the same.
@@ -478,7 +460,7 @@ void testDynamicStreams()
 
 	// Inside a vehicle the SampVoice client mutes 3D voice (it places itself
 	// at the stale ped matrix): the stream is recreated without 3D, and as a
-	// 3D point again when the player gets out.
+	// "stream at player" again when the player gets out.
 	const auto flatStreams = transport.controls(2, vb::ctl::createGStream);
 	CHECK(!flatStreams.empty());
 	if (!flatStreams.empty())
@@ -488,10 +470,10 @@ void testDynamicStreams()
 		CHECK(flatStream.stream == stream);
 	}
 	CHECK(server.hasListener(stream, 2));
-	const std::size_t pointsBefore = transport.controls(2, vb::ctl::createLPStream).size();
+	const std::size_t atPlayerBefore = transport.controls(2, vb::ctl::createLStreamAtPlayer).size();
 	world.players[2].vehicle = -1;
 	pump(80);
-	CHECK(transport.controls(2, vb::ctl::createLPStream).size() == pointsBefore + 1);
+	CHECK(transport.controls(2, vb::ctl::createLStreamAtPlayer).size() == atPlayerBefore + 1);
 
 	// The same when it is the speaker who is in a vehicle.
 	const std::size_t flatBefore = transport.controls(2, vb::ctl::createGStream).size();
@@ -501,7 +483,7 @@ void testDynamicStreams()
 	CHECK(server.hasListener(stream, 2));
 	world.players[0].vehicle = -1;
 	pump(80);
-	CHECK(transport.controls(2, vb::ctl::createLPStream).size() == pointsBefore + 2);
+	CHECK(transport.controls(2, vb::ctl::createLStreamAtPlayer).size() == atPlayerBefore + 2);
 
 	CHECK(server.setStreamMaxListeners(stream, 1));
 	world.players[1].position.x = 2.f;
@@ -662,6 +644,52 @@ void testSecurityAndClientTypes()
 	server.stop();
 }
 
+// Server voice gain: decode, amplify, encode again with the same duration.
+void testVoiceGain()
+{
+	int error = 0;
+	OpusEncoder* encoder = opus_encoder_create(48000, 1, OPUS_APPLICATION_VOIP, &error);
+	OpusDecoder* decoder = opus_decoder_create(48000, 1, &error);
+	CHECK(encoder && decoder);
+	opus_encoder_ctl(encoder, OPUS_SET_BITRATE(32000));
+	std::vector<int16_t> tone(4800);
+	vbs::VoiceGain gain;
+	double inEnergy = 0.0;
+	double outEnergy = 0.0;
+	int frames = 0;
+	for (int packet = 0; packet < 8; ++packet)
+	{
+		for (int i = 0; i < 4800; ++i)
+		{
+			tone[i] = static_cast<int16_t>(4000.0 * std::sin(2.0 * 3.14159265 * 300.0 * (packet * 4800 + i) / 48000.0));
+		}
+		uint8_t in[1500];
+		const int size = opus_encode(encoder, tone.data(), 4800, in, sizeof(in));
+		CHECK(size > 0);
+		uint8_t out[1400];
+		std::size_t written = 0;
+		CHECK(!gain.apply(0, packet, 1.f, 32000, in, size, out, sizeof(out), written)); // 100%: untouched
+		CHECK(gain.apply(0, packet, 2.f, 32000, in, size, out, sizeof(out), written));
+		CHECK(opus_packet_get_nb_samples(out, static_cast<opus_int32>(written), 48000) == 4800); // still 100 ms
+		std::vector<int16_t> pcm(4800);
+		CHECK(opus_decode(decoder, out, static_cast<opus_int32>(written), pcm.data(), 4800, 0) == 4800);
+		if (packet >= 2) // after the codecs settled
+		{
+			for (int i = 0; i < 4800; ++i)
+			{
+				inEnergy += static_cast<double>(tone[i]) * tone[i];
+				outEnergy += static_cast<double>(pcm[i]) * pcm[i];
+			}
+			++frames;
+		}
+	}
+	const double ratio = std::sqrt(outEnergy / inEnergy);
+	std::printf("voice gain 2.0 -> measured %.2f\n", ratio);
+	CHECK(frames == 6 && ratio > 1.7 && ratio < 2.3);
+	opus_encoder_destroy(encoder);
+	opus_decoder_destroy(decoder);
+}
+
 int main()
 {
 	testProtocol();
@@ -669,6 +697,7 @@ int main()
 	testDynamicStreams();
 	testSequencedEnvelope();
 	testSecurityAndClientTypes();
+	testVoiceGain();
 	LogFlush();
 	if (g_failures)
 	{

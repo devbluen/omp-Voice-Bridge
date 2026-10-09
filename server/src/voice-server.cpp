@@ -21,8 +21,6 @@ constexpr uint64_t kUdpWarnAfterMs = 10000;
 constexpr uint64_t kProbeDelayMs = 1500;
 constexpr std::size_t kMaxTunnelQueue = 8192;
 constexpr std::size_t kPositionsPerPacket = 64;
-// Movement (metres) before a SampVoice listener gets a new point position.
-constexpr float kLegacyPointStep = 0.4f;
 
 // voice_log_file: empty = logs/voice-bridge.log (open.mp has a logs folder),
 // else voice-bridge.log next to the server; "off" disables the file.
@@ -190,6 +188,7 @@ bool VoiceServer::start(const Config& config, ITransport* transport, IWorld* wor
 	world_ = world;
 	events_ = events;
 	bitrate_ = config.bitrate;
+	globalGain_ = static_cast<float>(config.gainPercent) / 100.f;
 	allowSampVoice_ = config.allowSampVoice;
 	allowVoiceBridge_ = config.allowVoiceBridge;
 	LogSetDebug(config.debug);
@@ -484,6 +483,7 @@ void VoiceServer::resetPlayer(uint16_t player, bool notifyScripts)
 		ipReported_[player] = false;
 		lockedIp_[player] = 0;
 		deliveredTo_[player] = 0;
+		gain_.reset(player);
 		dropLogged_[player] = 0;
 		receivedFrom_[player] = 0;
 		vehicleWatch_[player] = VehicleWatch {};
@@ -549,6 +549,7 @@ void VoiceServer::onClientJoin(uint16_t player, const uint8_t* data, std::size_t
 		p.clientType = type;
 		p.showSpeakerList = config_.showSpeakerList;
 		p.showMicIcon = config_.showMicIcon;
+		p.showHeadIcons = config_.showHeadIcons;
 		p.allowVoiceActivation = config_.allowVoiceActivation;
 		if (type != ClientType::None)
 		{
@@ -615,7 +616,7 @@ void VoiceServer::sendClientConfig(uint16_t player)
 		return;
 	}
 	const vb::VbConfig clientConfig { static_cast<uint8_t>(p.allowVoiceActivation), static_cast<uint8_t>(p.showSpeakerList),
-		static_cast<uint8_t>(p.showMicIcon), 0 };
+		static_cast<uint8_t>(p.showMicIcon), static_cast<uint8_t>(!p.showHeadIcons) };
 	queueControl(player, vb::ctl::vbConfig, &clientConfig, sizeof(clientConfig));
 }
 
@@ -744,6 +745,39 @@ bool VoiceServer::setPlayerMicIcon(uint16_t player, bool visible)
 		return false;
 	}
 	players_[player].showMicIcon = visible;
+	sendClientConfig(player);
+	flushOutbox();
+	return true;
+}
+
+void VoiceServer::setVoiceGain(float gain)
+{
+	globalGain_ = std::clamp(gain, 0.f, 4.f);
+}
+
+bool VoiceServer::setPlayerVoiceGain(uint16_t player, float gain)
+{
+	if (!validPlayer(player) || !players_[player].connected)
+	{
+		return false;
+	}
+	std::unique_lock<std::shared_mutex> lock(routeMutex_);
+	players_[player].voiceGain = std::clamp(gain, 0.f, 4.f);
+	return true;
+}
+
+float VoiceServer::playerVoiceGain(uint16_t player) const
+{
+	return validPlayer(player) ? players_[player].voiceGain : 0.f;
+}
+
+bool VoiceServer::setPlayerHeadIcons(uint16_t player, bool visible)
+{
+	if (!validPlayer(player) || !players_[player].connected)
+	{
+		return false;
+	}
+	players_[player].showHeadIcons = visible;
 	sendClientConfig(player);
 	flushOutbox();
 	return true;
@@ -1249,27 +1283,16 @@ bool VoiceServer::legacyWantsFlat(uint16_t listener, const Stream& stream)
 void VoiceServer::sendStreamState(const Stream& stream, uint16_t player)
 {
 	Player& p = players_[player];
-	Pose pose;
 	if (!p.extended && legacyWantsFlat(player, stream))
 	{
+		// A vehicle is involved: no 3D for the SampVoice client (see
+		// legacyWantsFlat).  On foot it gets the original stream types, so
+		// its speaker icon (drawn only for "stream at player") keeps working.
 		std::vector<uint8_t> payload;
 		append(payload, vb::CreateGStreamPacket { stream.id, stream.color });
 		appendString(payload, stream.name);
 		queueControl(player, vb::ctl::createGStream, payload);
-		p.legacyPoints.erase(stream.id);
 		p.legacyFlat.insert(stream.id);
-	}
-	else if (!p.extended && StreamTarget(stream.type) == TargetKind::Player && sourcePose(stream, pose))
-	{
-		// The SampVoice client places a "stream at player" at that player's
-		// ped matrix, which GTA does not update inside a vehicle: the voice
-		// went silent as soon as the speaker got in a car.  It gets a point
-		// stream instead, kept at the server's position (tickPositions).
-		std::vector<uint8_t> payload;
-		append(payload, vb::CreateLPStreamPacket { stream.id, stream.distance, pose.position, stream.color });
-		appendString(payload, stream.name);
-		queueControl(player, vb::ctl::createLPStream, payload);
-		p.legacyPoints[stream.id] = pose.position;
 	}
 	else
 	{
@@ -1973,7 +1996,6 @@ void VoiceServer::tickPositions()
 				continue;
 			}
 			legacy.legacyFlat.erase(streamId);
-			legacy.legacyPoints.erase(streamId);
 			const vb::DeleteStreamPacket remove { streamId };
 			queueControl(id, vb::ctl::deleteStream, &remove, sizeof(remove));
 			sendStreamState(*stream, id);
@@ -1984,33 +2006,6 @@ void VoiceServer::tickPositions()
 		{
 			const Stream* stream = findStream(*it);
 			it = !stream || !stream->listenerMask.test(id) ? legacy.legacyFlat.erase(it) : std::next(it);
-		}
-		if (legacy.legacyPoints.empty())
-		{
-			continue;
-		}
-		for (auto it = legacy.legacyPoints.begin(); it != legacy.legacyPoints.end();)
-		{
-			const Stream* stream = findStream(it->first);
-			if (!stream || !stream->listenerMask.test(id))
-			{
-				it = legacy.legacyPoints.erase(it);
-				continue;
-			}
-			vb::Vec3 position {};
-			if (lookup(*stream, position))
-			{
-				const float mx = position.x - it->second.x;
-				const float my = position.y - it->second.y;
-				const float mz = position.z - it->second.z;
-				if (mx * mx + my * my + mz * mz > kLegacyPointStep * kLegacyPointStep)
-				{
-					it->second = position;
-					const vb::UpdateLPStreamPositionPacket packet { stream->id, position };
-					queueControl(id, vb::ctl::updateLPStreamPosition, &packet, sizeof(packet));
-				}
-			}
-			++it;
 		}
 	}
 
@@ -2593,6 +2588,16 @@ void VoiceServer::relayVoice(uint16_t sender, uint32_t packid, const uint8_t* op
 		logDroppedVoice(sender, VoiceIgnored::NotSpeaker,
 			"the player is not a speaker of any stream (the script did not call VB_AddSpeaker / SvAttachSpeakerToStream)");
 		return;
+	}
+
+	// Server voice gain (voice_gain, VB_SetVoiceGain, VB_SetPlayerVoiceGain).
+	uint8_t amplified[vb::kMaxVoicePacketSize];
+	std::size_t amplifiedSize = 0;
+	if (gain_.apply(sender, packid, globalGain_.load() * speaker.voiceGain, bitrate_, opus, size, amplified, vb::kMaxVoicePacketSize - kHeaderSize,
+			amplifiedSize))
+	{
+		opus = amplified;
+		size = static_cast<uint16_t>(amplifiedSize);
 	}
 
 	uint8_t packet[vb::kMaxVoicePacketSize];

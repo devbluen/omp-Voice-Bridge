@@ -94,6 +94,8 @@ native VB_GetVoicePort();
 native VB_SetDebug(bool:enabled);
 native VB_SetBitrate(bitrate);
 native VB_GetBitrate();
+native VB_SetVoiceGain(Float:gain);   // volume of every voice, 1.0 = normal (up to 4.0); also voice_gain
+native Float:VB_GetVoiceGain();
 
 native bool:VB_AllowClientType(type, bool:allowed);
 native bool:VB_IsClientTypeAllowed(type);
@@ -138,9 +140,12 @@ native bool:VB_IsPlayerMuted(playerid);
 native bool:VB_BlockSpeaker(listenerid, speakerid, bool:block);
 native bool:VB_IsSpeakerBlocked(listenerid, speakerid);
 native bool:VB_SetSpeakerVolume(listenerid, speakerid, Float:volume);
+native bool:VB_SetPlayerVoiceGain(playerid, Float:gain);   // volume of this player's voice for everyone (up to 4.0)
+native Float:VB_GetPlayerVoiceGain(playerid);
 
 native bool:VB_SetPlayerSpeakerList(playerid, bool:enabled);
 native bool:VB_SetPlayerMicIcon(playerid, bool:enabled);
+native bool:VB_SetPlayerHeadIcons(playerid, bool:enabled);
 native bool:VB_SetPlayerVoiceActivation(playerid, bool:enabled);
 native bool:VB_Notify(playerid, const text[], color = 0xFFFFFFFF, duration = 4000);
 

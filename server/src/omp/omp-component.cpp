@@ -205,9 +205,11 @@ void VoiceBridgeComponent::provideConfiguration(ILogger&, IEarlyConfig& config, 
 	config.setString("voice_bridge.public_host", "");
 	config.setBool("voice_bridge.strict_ip", false);
 	config.setInt("voice_bridge.bitrate", 24000);
+	config.setInt("voice_bridge.gain", 100);
 	config.setInt("voice_bridge.frame_ms", 100);
 	config.setBool("voice_bridge.tunnel", true);
 	config.setBool("voice_bridge.force_tunnel", false);
+	config.setBool("voice_bridge.show_head_icons", true);
 	config.setBool("voice_bridge.allow_sampvoice", true);
 	config.setBool("voice_bridge.allow_voicebridge", true);
 	config.setBool("voice_bridge.debug", false);

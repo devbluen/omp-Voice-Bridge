@@ -761,6 +761,42 @@ NATIVE(n_VB_SetPlayerSpeakerList)
 	return server().setPlayerSpeakerList(playerId(params[1]), params[2] != 0);
 }
 
+NATIVE(n_VB_SetVoiceGain)
+{
+	UNUSED_AMX;
+	REQUIRE(1);
+	server().setVoiceGain(toFloat(params[1]));
+	return 1;
+}
+
+NATIVE(n_VB_GetVoiceGain)
+{
+	UNUSED_AMX;
+	REQUIRE(0);
+	return fromFloat(server().voiceGain());
+}
+
+NATIVE(n_VB_SetPlayerVoiceGain)
+{
+	UNUSED_AMX;
+	REQUIRE(2);
+	return server().setPlayerVoiceGain(playerId(params[1]), toFloat(params[2]));
+}
+
+NATIVE(n_VB_GetPlayerVoiceGain)
+{
+	UNUSED_AMX;
+	REQUIRE(1);
+	return fromFloat(server().playerVoiceGain(playerId(params[1])));
+}
+
+NATIVE(n_VB_SetPlayerHeadIcons)
+{
+	UNUSED_AMX;
+	REQUIRE(2);
+	return server().setPlayerHeadIcons(playerId(params[1]), params[2] != 0);
+}
+
 NATIVE(n_VB_SetPlayerMicIcon)
 {
 	UNUSED_AMX;
@@ -1231,6 +1267,11 @@ const AMX_NATIVE_INFO kNatives[] = {
 	{ "VB_IsClientTypeAllowed", n_VB_IsClientTypeAllowed },
 	{ "VB_SetPlayerSpeakerList", n_VB_SetPlayerSpeakerList },
 	{ "VB_SetPlayerMicIcon", n_VB_SetPlayerMicIcon },
+	{ "VB_SetPlayerHeadIcons", n_VB_SetPlayerHeadIcons },
+	{ "VB_SetVoiceGain", n_VB_SetVoiceGain },
+	{ "VB_GetVoiceGain", n_VB_GetVoiceGain },
+	{ "VB_SetPlayerVoiceGain", n_VB_SetPlayerVoiceGain },
+	{ "VB_GetPlayerVoiceGain", n_VB_GetPlayerVoiceGain },
 	{ "VB_SetPlayerVoiceActivation", n_VB_SetPlayerVoiceActivation },
 	{ "VB_HasMicrophone", n_VB_HasMicrophone },
 	{ "VB_GetTransport", n_VB_GetTransport },

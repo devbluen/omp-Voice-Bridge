@@ -68,6 +68,7 @@ void LoadSettings()
 	s.voiceActivation = readBool("VoiceActivation", defaults.voiceActivation);
 	s.voiceActivationLevel = readInt("VoiceActivationLevel", defaults.voiceActivationLevel, -80, -5);
 	s.showSpeakerList = readBool("ShowSpeakerList", defaults.showSpeakerList);
+	s.showHeadIcons = readBool("ShowHeadIcons", defaults.showHeadIcons);
 	s.showMicIcon = readBool("ShowMicIcon", defaults.showMicIcon);
 	s.uiScale = readInt("UiScale", defaults.uiScale, 50, 300);
 	s.menuKey = readInt("MenuKey", defaults.menuKey, 0, 255);
@@ -106,6 +107,7 @@ void SaveSettings()
 	write("VoiceActivation", s.voiceActivation ? 1 : 0);
 	write("VoiceActivationLevel", s.voiceActivationLevel);
 	write("ShowSpeakerList", s.showSpeakerList ? 1 : 0);
+	write("ShowHeadIcons", s.showHeadIcons ? 1 : 0);
 	write("ShowMicIcon", s.showMicIcon ? 1 : 0);
 	write("UiScale", s.uiScale);
 	WritePrivateProfileStringA(kSection, "MenuCommand", nullptr, path().c_str());

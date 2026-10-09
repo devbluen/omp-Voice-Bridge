@@ -30,4 +30,7 @@ struct Listener
 // Orientation of the character or of the camera (what the player sees).
 Listener GetListener(bool characterOrientation);
 bool IsMenuActive();
+// Screen position (pixels) of a world point, GTA's CSprite::CalcScreenCoors.
+// False when it is behind the camera.  Game (render) thread only.
+bool WorldToScreen(const Vec3& world, float& x, float& y, float& depth);
 }

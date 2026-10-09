@@ -25,6 +25,9 @@ struct Config
 	// Reject voice packets whose source IP differs from the game connection.
 	bool strictIp = false;
 	uint32_t bitrate = 24000;
+	// Volume of every voice, in percent (100 = unchanged).  Above 100 the
+	// server re-encodes the audio (clients cannot amplify past 100%).
+	uint32_t gainPercent = 100;
 	// Opus frame length requested from Voice Bridge clients.  SampVoice
 	// clients can only decode 100 ms frames, so lower values make Voice
 	// Bridge speakers inaudible to them.
@@ -46,6 +49,7 @@ struct Config
 	bool allowVoiceActivation = false;
 	bool showSpeakerList = true;
 	bool showMicIcon = true;
+	bool showHeadIcons = true; // microphone above the head of whoever talks
 
 	// Which voice clients may use voice chat.
 	bool allowSampVoice = true;

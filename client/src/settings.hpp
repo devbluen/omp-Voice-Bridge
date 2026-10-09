@@ -19,6 +19,7 @@ struct Settings
 	bool voiceActivation = false; // only used when the server allows it
 	int voiceActivationLevel = -38; // dBFS
 	bool showSpeakerList = true;
+	bool showHeadIcons = true; // microphone above the head of whoever talks
 	bool showMicIcon = true;
 	int uiScale = 100; // %
 	int menuKey = 0x7A; // VK_F11: opens the voice menu

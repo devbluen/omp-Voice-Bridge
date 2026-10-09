@@ -55,6 +55,7 @@ struct VoiceStatus
 	bool allowVoiceActivation = false;
 	bool showSpeakerList = true;
 	bool showMicIcon = true;
+	bool showHeadIcons = true;
 	std::vector<uint8_t> keys;
 };
 
@@ -124,6 +125,7 @@ private:
 	bool allowVoiceActivation_ = false;
 	bool showSpeakerList_ = true;
 	bool showMicIcon_ = true;
+	bool showHeadIcons_ = true;
 	std::set<uint8_t> keys_;
 	std::set<uint8_t> pressed_;
 	bool vadKeyDown_ = false;

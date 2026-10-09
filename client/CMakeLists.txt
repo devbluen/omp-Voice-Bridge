@@ -1,21 +1,5 @@
 include(FetchContent)
 
-# Opus 1.4 (the last release without the downloadable neural network models).
-set(OPUS_BUILD_SHARED_LIBRARY OFF CACHE BOOL "" FORCE)
-set(OPUS_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-set(OPUS_BUILD_PROGRAMS OFF CACHE BOOL "" FORCE)
-set(OPUS_INSTALL_PKG_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
-set(OPUS_INSTALL_CMAKE_CONFIG_MODULE OFF CACHE BOOL "" FORCE)
-set(BUILD_TESTING_SAVED ${BUILD_TESTING})
-set(BUILD_TESTING OFF)
-FetchContent_Declare(opus
-	GIT_REPOSITORY https://github.com/xiph/opus.git
-	GIT_TAG v1.4
-	GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(opus)
-set(BUILD_TESTING ${BUILD_TESTING_SAVED})
-
 FetchContent_Declare(imgui
 	GIT_REPOSITORY https://github.com/ocornut/imgui.git
 	GIT_TAG v1.91.9

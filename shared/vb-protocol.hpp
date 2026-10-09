@@ -471,7 +471,7 @@ struct VbConfig
 	uint8_t allowVoiceActivation;
 	uint8_t showSpeakerList;
 	uint8_t showMicIcon;
-	uint8_t reserved;
+	uint8_t hideHeadIcons; // 1 = no microphone icons above heads (0 from older servers: allowed)
 };
 
 #pragma pack(pop)

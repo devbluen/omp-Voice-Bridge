@@ -193,6 +193,36 @@ void dragMicIcon(const ImVec2& center, float size, const ImVec2& display)
 	}
 }
 
+// Microphone above the head of every player being heard (like SampVoice).
+void drawHeadIcons(ImDrawList* draw, float scale)
+{
+	const uint64_t t = GetTickCount64();
+	for (const SpeakerInfo& speaker : Audio::Get().speakers())
+	{
+		float position[3];
+		if (!samp::PlayerPosition(speaker.player, position))
+		{
+			continue; // not streamed in
+		}
+		const game::Vec3 head { position[0], position[1], position[2] + 1.05f };
+		float x = 0.f;
+		float y = 0.f;
+		float depth = 0.f;
+		if (!game::WorldToScreen(head, x, y, depth) || depth <= 0.5f || depth > 60.f)
+		{
+			continue;
+		}
+		// Smaller with distance, a little pulse with the voice level.
+		const float level = std::clamp((speaker.level + 50.f) / 40.f, 0.f, 1.f);
+		const float size = std::clamp(46.f * scale * 5.f / depth, 12.f * scale, 40.f * scale);
+		const ImVec2 center(x, y - size * 0.6f);
+		const float pulse = 0.85f + 0.15f * std::sin(static_cast<float>(t % 1000) / 1000.f * 6.2831f);
+		draw->AddCircleFilled(center, size * (0.62f + 0.22f * level) * pulse, IM_COL32(60, 220, 90, 70));
+		draw->AddCircleFilled(center, size * 0.55f, IM_COL32(15, 15, 15, 170));
+		drawMicrophone(draw, center, size * 0.75f, IM_COL32(60, 220, 90, 255), false);
+	}
+}
+
 void drawHud(const VoiceStatus& status)
 {
 	const Settings& settings = GetSettings();
@@ -228,6 +258,11 @@ void drawHud(const VoiceStatus& status)
 		{
 			draw->AddText(ImVec2(center.x + size * 0.45f, center.y + size * 0.15f), IM_COL32(255, 80, 80, 255), "!");
 		}
+	}
+
+	if (status.server != ServerKind::None && status.showHeadIcons && settings.showHeadIcons)
+	{
+		drawHeadIcons(draw, scale);
 	}
 
 	if (status.showSpeakerList && settings.showSpeakerList)
@@ -701,6 +736,11 @@ bool pageInterface()
 	sectionTitle(tr("On screen", "Na tela"));
 	changed |= toggle(tr("Show who is talking", "Mostrar quem está falando"), &settings.showSpeakerList);
 	changed |= toggle(tr("Show the microphone icon", "Mostrar o ícone do microfone"), &settings.showMicIcon);
+	changed |= toggle(tr("Microphone above the head of who is talking", "Microfone na cabeça de quem está falando"), &settings.showHeadIcons);
+	if (!g_previewMode && !VoiceClient::Get().status().showHeadIcons)
+	{
+		ImGui::TextColored(kMuted, "%s", tr("This server disabled the icons above heads.", "Este servidor desativou os ícones na cabeça."));
+	}
 	ImGui::Spacing();
 	ImGui::TextColored(kMuted, "%s", tr("Size", "Tamanho"));
 	ImGui::SetNextItemWidth(-1.f);

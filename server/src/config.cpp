@@ -211,6 +211,7 @@ Config LoadConfig(ConfigSource& source)
 	const Key publicHost { "VOICE_BRIDGE_PUBLIC_HOST", "voice_bridge.public_host", "voice_public_host", nullptr, nullptr };
 	const Key strictIp { "VOICE_BRIDGE_STRICT_IP", "voice_bridge.strict_ip", "voice_strict_ip", nullptr, nullptr };
 	const Key bitrate { "VOICE_BRIDGE_BITRATE", "voice_bridge.bitrate", "voice_bitrate", nullptr, nullptr };
+	const Key gain { "VOICE_BRIDGE_GAIN", "voice_bridge.gain", "voice_gain", nullptr, nullptr };
 	const Key frameMs { "VOICE_BRIDGE_FRAME_MS", "voice_bridge.frame_ms", "voice_frame_ms", nullptr, nullptr };
 	const Key tunnel { "VOICE_BRIDGE_TUNNEL", "voice_bridge.tunnel", "voice_tunnel", nullptr, nullptr };
 	const Key forceTunnel { "VOICE_BRIDGE_FORCE_TUNNEL", "voice_bridge.force_tunnel", "voice_force_tunnel", nullptr, nullptr };
@@ -223,6 +224,7 @@ Config LoadConfig(ConfigSource& source)
 	const Key voiceActivation { "VOICE_BRIDGE_ALLOW_VOICE_ACTIVATION", "voice_bridge.allow_voice_activation", "voice_allow_voice_activation", nullptr, nullptr };
 	const Key speakerList { "VOICE_BRIDGE_SHOW_SPEAKER_LIST", "voice_bridge.show_speaker_list", "voice_show_speaker_list", nullptr, nullptr };
 	const Key micIcon { "VOICE_BRIDGE_SHOW_MIC_ICON", "voice_bridge.show_mic_icon", "voice_show_mic_icon", nullptr, nullptr };
+	const Key headIcons { "VOICE_BRIDGE_SHOW_HEAD_ICONS", "voice_bridge.show_head_icons", "voice_show_head_icons", nullptr, nullptr };
 	const Key allowSampVoice { "VOICE_BRIDGE_ALLOW_SAMPVOICE", "voice_bridge.allow_sampvoice", "voice_allow_sampvoice", nullptr, nullptr };
 	const Key allowVoiceBridge { "VOICE_BRIDGE_ALLOW_VOICEBRIDGE", "voice_bridge.allow_voicebridge", "voice_allow_voicebridge", nullptr, nullptr };
 	const Key gamePort { nullptr, "network.port", "port", nullptr, nullptr };
@@ -233,6 +235,7 @@ Config LoadConfig(ConfigSource& source)
 	lookupString(source, publicHost, config.publicHost);
 	lookupBool(source, strictIp, config.strictIp);
 	readRanged(source, bitrate, config.bitrate, 6000, 128000, "voice_bitrate");
+	readRanged(source, gain, config.gainPercent, 0, 400, "voice_gain");
 
 	int frame = config.frameMs;
 	if (lookupInt(source, frameMs, frame))
@@ -258,6 +261,7 @@ Config LoadConfig(ConfigSource& source)
 	lookupBool(source, voiceActivation, config.allowVoiceActivation);
 	lookupBool(source, speakerList, config.showSpeakerList);
 	lookupBool(source, micIcon, config.showMicIcon);
+	lookupBool(source, headIcons, config.showHeadIcons);
 	lookupBool(source, allowSampVoice, config.allowSampVoice);
 	lookupBool(source, allowVoiceBridge, config.allowVoiceBridge);
 	readRanged(source, gamePort, config.gamePort, 1, 65535, "port");

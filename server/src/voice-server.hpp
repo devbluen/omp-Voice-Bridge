@@ -14,6 +14,7 @@
 
 #include "config.hpp"
 #include "udp-socket.hpp"
+#include "voice-gain.hpp"
 #include <vb-protocol.hpp>
 #include <array>
 #include <atomic>
@@ -175,6 +176,7 @@ struct Player
 	ClientType clientType = ClientType::None; // detected, even when not allowed
 	bool showSpeakerList = true;
 	bool showMicIcon = true;
+	bool showHeadIcons = true;
 	bool allowVoiceActivation = false;
 	bool connected = false;
 	bool plugin = false;
@@ -202,9 +204,6 @@ struct Player
 	std::set<uint8_t> keys;
 	std::vector<uint32_t> speakerStreams;
 	std::vector<uint32_t> listenerStreams;
-	// SampVoice listeners hear streams that follow a player as point streams
-	// moved by the server (last position sent, per stream).
-	std::map<uint32_t, vb::Vec3> legacyPoints;
 	// Streams sent to this SampVoice listener without 3D because the
 	// listener or the speaker is in a vehicle: inside vehicles GTA leaves the
 	// ped matrix stale and the client mutes 3D voice it places with it.
@@ -213,6 +212,7 @@ struct Player
 	std::bitset<kMaxPlayers> blocked;
 
 	bool talking = false;
+	float voiceGain = 1.f; // VB_SetPlayerVoiceGain, times the server gain
 	bool clientMicAvailable = false;
 	bool clientMicMuted = false;
 	bool clientSoundMuted = false;
@@ -251,6 +251,12 @@ public:
 	bool isClientTypeAllowed(ClientType type) const;
 	bool setPlayerSpeakerList(uint16_t player, bool visible);
 	bool setPlayerMicIcon(uint16_t player, bool visible);
+	// Voice volume (1.0 = unchanged): of everybody, and of one speaker.
+	void setVoiceGain(float gain);
+	float voiceGain() const { return globalGain_.load(); }
+	bool setPlayerVoiceGain(uint16_t player, float gain);
+	float playerVoiceGain(uint16_t player) const;
+	bool setPlayerHeadIcons(uint16_t player, bool visible);
 	bool setPlayerVoiceActivation(uint16_t player, bool allowed);
 	uint8_t clientVersion(uint16_t player) const;
 	uint16_t clientBuild(uint16_t player) const;
@@ -418,6 +424,8 @@ private:
 	uint32_t nextWireEffect_ = 1;
 
 	std::array<std::atomic<uint64_t>, kMaxPlayers> udpAddress_ {};
+	VoiceGain gain_;
+	std::atomic<float> globalGain_ { 1.f };
 	// Diagnostics: voice packets sent to / accepted from each player.
 	std::array<std::atomic<uint32_t>, kMaxPlayers> deliveredTo_ {};
 	std::array<std::atomic<uint32_t>, kMaxPlayers> receivedFrom_ {};
