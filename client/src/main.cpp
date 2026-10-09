@@ -21,7 +21,7 @@ DWORD WINAPI initialise(LPVOID)
 {
 	using namespace vbc;
 	LogOpen(GameDirectory() + "voicebridge.log");
-	Log("Voice Bridge client %s - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
+	Log("Voice Bridge client %s (build " VOICE_BRIDGE_COMMIT ") - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
 	crash::Install();
 
 	// SA-MP injects samp.dll after the ASI plugins are loaded.

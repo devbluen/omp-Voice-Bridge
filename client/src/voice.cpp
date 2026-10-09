@@ -10,6 +10,7 @@
 #include "settings.hpp"
 #include "version.hpp"
 #include <vb-protocol.hpp>
+#include <cmath>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <mstcpip.h>
@@ -502,6 +503,7 @@ void VoiceClient::handleControl(uint16_t type, const uint8_t* p, std::size_t siz
 		vb::VoiceHeader header;
 		if (read(p, size, header) && vb::checkVoiceHeader(header) && sizeof(header) + header.length == size && header.packet == vb::voice::voicePacket)
 		{
+			++voicePackets_;
 			audio.pushVoice(header.stream, header.sender, header.packid, p + sizeof(header), header.length);
 		}
 		break;
@@ -663,6 +665,7 @@ void VoiceClient::handleDatagram(const uint8_t* data, int size)
 	switch (header.packet)
 	{
 	case vb::voice::voicePacket:
+		++voicePackets_;
 		Audio::Get().pushVoice(header.stream, header.sender, header.packid, payload, header.length);
 		break;
 	case vb::voice::vbPositions:
@@ -762,6 +765,37 @@ void VoiceClient::onEncodedFrame(const uint8_t* data, std::size_t size, uint32_t
 // ---------------------------------------------------------------------------
 // Per-frame logic
 // ---------------------------------------------------------------------------
+
+// Vehicle diagnostics: players reported hearing nobody while in a vehicle.
+// On entering/leaving and every 3 s inside, log where the listener and the
+// camera are and the state of every voice channel.
+void VoiceClient::logVehicleDiagnostics(const game::Listener& listener, uint64_t t)
+{
+	if (listener.inVehicle == wasInVehicle_ && (!listener.inVehicle || t - lastVehicleLog_ < 3000))
+	{
+		return;
+	}
+	const bool changed = listener.inVehicle != wasInVehicle_;
+	wasInVehicle_ = listener.inVehicle;
+	lastVehicleLog_ = t;
+	if (changed && !listener.inVehicle)
+	{
+		Log("vehicle diagnostics: left the vehicle");
+		return;
+	}
+	const float dx = listener.camera.x - listener.position.x;
+	const float dy = listener.camera.y - listener.position.y;
+	const float dz = listener.camera.z - listener.position.z;
+	Log("vehicle diagnostics%s: listener (%.1f, %.1f, %.1f) valid %d, camera (%.1f, %.1f, %.1f) %.1f m away (camera ok %d), server %s, transport %u, voice packets %u",
+		changed ? " (entered a vehicle)" : "", listener.position.x, listener.position.y, listener.position.z, listener.valid ? 1 : 0, listener.camera.x,
+		listener.camera.y, listener.camera.z, std::sqrt(dx * dx + dy * dy + dz * dz), listener.cameraValid ? 1 : 0,
+		server_ == ServerKind::VoiceBridge ? "Voice Bridge" : server_ == ServerKind::SampVoice ? "SampVoice" : "none", transport_,
+		static_cast<unsigned>(voicePackets_.load()));
+	for (const std::string& line : Audio::Get().diagnostics(listener))
+	{
+		Log("  %s", line.c_str());
+	}
+}
 
 void VoiceClient::resetSession()
 {
@@ -1017,7 +1051,9 @@ void VoiceClient::frame()
 	updateTransport(t);
 	updateKeys(t);
 	sendStatus(false);
-	Audio::Get().update(game::GetListener(GetSettings().orientationFromCharacter), serverPositions_);
+	const game::Listener listener = game::GetListener(GetSettings().orientationFromCharacter);
+	Audio::Get().update(listener, serverPositions_);
+	logVehicleDiagnostics(listener, t);
 
 	notifications_.erase(std::remove_if(notifications_.begin(), notifications_.end(), [t](const Notification& n) { return n.expires <= t; }),
 		notifications_.end());

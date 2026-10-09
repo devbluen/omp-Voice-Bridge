@@ -103,8 +103,8 @@ voice_bitrate 24000
 |---|---|---|---|
 | `strict_ip` | `voice_strict_ip` | false | Only accept voice from the game IP. When off, another IP (proxy/anti-DDoS) is accepted and logged. |
 | `max_packets_per_second` | `voice_max_packets_per_second` | 80 | Per-player flood limit. |
-| `debug` | `voice_debug` | false | Also print the details on the console. |
-| `log_file` | `voice_log_file` | - | Voice-only log with date, time and every detail. Default: `logs/voice-bridge.log` (open.mp) or `voice-bridge.log`. `off` disables it. |
+| `debug` | `voice_debug` | false | Log the details (who hears whom, vehicles, dropped voice) on the console and in the voice log. |
+| `log_file` | `voice_log_file` | - | Voice-only log with date and time (details only with `debug` on). Default: `logs/voice-bridge.log` (open.mp) or `voice-bridge.log`. `off` disables it. |
 
 Environment variables: `VOICE_BRIDGE_` + the name in upper case (e.g. `VOICE_BRIDGE_PORT`, `VOICE_BRIDGE_MAX_PACKETS`).
 
@@ -325,6 +325,7 @@ Also: `VB_IsValidEffect(effect)`. Effects and streams are freed automatically wh
 | `VB_OnPlayerTransportChange(playerid, transport)` | Voice connected, lost or moved to the tunnel. |
 | `VB_OnPlayerStartTalking(playerid)` / `VB_OnPlayerStopTalking(playerid)` | Started/stopped talking. |
 | `VB_OnPlayerClientStatus(playerid, bool:micavailable, bool:micmuted, bool:soundmuted)` | Changed voice options in the menu. |
+| `VB_OnPlayerVoiceIgnored(playerid, reason)` | The player talks but the voice is dropped (at most once every 10 s). `reason`: `VB_VOICE_IGNORED_NOT_SPEAKER` (not a speaker of any stream, missing `VB_AddSpeaker`), `_NO_KEY` (no talk key), `_MUTED`, `_CLIENT_NOT_ALLOWED`. |
 
 ## Client menu and settings
 

@@ -127,6 +127,11 @@ void VoiceBridgeComponent::onInit(IComponentList* components)
 	pawn_ = components->queryComponent<IPawnComponent>();
 	vehicles_ = components->queryComponent<IVehiclesComponent>();
 	objects_ = components->queryComponent<IObjectsComponent>();
+	console_ = components->queryComponent<IConsoleComponent>();
+	if (console_)
+	{
+		console_->getEventDispatcher().addEventHandler(this);
+	}
 	if (pawn_)
 	{
 		vbs::SetAmxFunctionTable(const_cast<void**>(pawn_->getAmxFunctions().data()));
@@ -143,7 +148,7 @@ void VoiceBridgeComponent::onInit(IComponentList* components)
 	const vbs::Config config = vbs::LoadConfig(source);
 	active_ = vbs::VoiceServer::Get().start(config, this, this, &vbs::PawnHost::Get());
 	started_ = true;
-	vbs::LogInfo("Voice Bridge %s loaded (open.mp component) - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
+	vbs::LogInfo("Voice Bridge %s (build " VOICE_BRIDGE_COMMIT ") loaded (open.mp component) - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
 }
 
 void VoiceBridgeComponent::onReady()
@@ -176,6 +181,10 @@ void VoiceBridgeComponent::onFree(IComponent* component)
 	else if (component == vehicles_)
 	{
 		vehicles_ = nullptr;
+	}
+	else if (component == console_)
+	{
+		console_ = nullptr;
 	}
 	else if (component == objects_)
 	{
@@ -223,6 +232,10 @@ void VoiceBridgeComponent::free()
 	if (core_)
 	{
 		core_->getEventDispatcher().removeEventHandler(this);
+		if (console_)
+		{
+			console_->getEventDispatcher().removeEventHandler(this);
+		}
 		core_->getPlayers().getPlayerConnectDispatcher().removeEventHandler(this);
 		for (INetwork* network : core_->getNetworks())
 		{
@@ -348,6 +361,33 @@ uint32_t VoiceBridgeComponent::playerIp(uint16_t player)
 	return data.networkID.address.ipv6 ? 0 : data.networkID.address.v4;
 }
 
+bool VoiceBridgeComponent::onConsoleText(StringView command, StringView parameters, const ConsoleCommandSenderData& sender)
+{
+	if (command != "voice")
+	{
+		return false;
+	}
+	int player = -1;
+	if (!parameters.empty())
+	{
+		player = std::atoi(std::string(parameters.data(), parameters.size()).c_str());
+	}
+	for (const std::string& line : vbs::VoiceServer::Get().statusReport(player))
+	{
+		if (console_)
+		{
+			console_->sendMessage(sender, line);
+		}
+		vbs::LogDebug("console: %s", line.c_str()); // also in the voice log
+	}
+	return true;
+}
+
+void VoiceBridgeComponent::onConsoleCommandListRequest(FlatHashSet<StringView>& commands)
+{
+	commands.emplace("voice");
+}
+
 bool VoiceBridgeComponent::playerPose(uint16_t player, vbs::Pose& out)
 {
 	IPlayer* target = core_ ? core_->getPlayers().get(player) : nullptr;
@@ -365,6 +405,7 @@ bool VoiceBridgeComponent::playerPose(uint16_t player, vbs::Pose& out)
 			if (IVehicle* vehicle = data->getVehicle())
 			{
 				position = vehicle->getPosition();
+				out.vehicle = vehicle->getID();
 			}
 		}
 	}

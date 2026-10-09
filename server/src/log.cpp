@@ -139,11 +139,11 @@ void write(Level level, const char* format, va_list args)
 	char buffer[1024];
 	std::vsnprintf(buffer, sizeof(buffer), format, args);
 	std::string message(buffer);
-	writeFile(level, message);
 	if (level == Level::Debug && !g_debug)
 	{
-		return; // details go to the voice log only, unless voice_debug is on
+		return; // details (file and console) only with voice_debug on
 	}
+	writeFile(level, message);
 
 	if (g_mainKnown && std::this_thread::get_id() != g_mainThread)
 	{
@@ -248,6 +248,10 @@ bool LogSetFile(const std::string& path)
 	if (!path.empty())
 	{
 		g_file = std::fopen(path.c_str(), "a");
+	}
+	if (g_file)
+	{
+		std::fprintf(g_file, "\n"); // a blank line between server starts
 	}
 	return g_file != nullptr;
 }

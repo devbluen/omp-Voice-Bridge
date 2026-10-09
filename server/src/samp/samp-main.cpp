@@ -176,7 +176,7 @@ PLUGIN_EXPORT bool PLUGIN_CALL Load(void** data)
 	}
 
 	g_active = VoiceServer::Get().start(config, &g_transport, &g_world, &PawnHost::Get());
-	LogInfo("Voice Bridge %s loaded (SA-MP plugin) - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
+	LogInfo("Voice Bridge %s (build " VOICE_BRIDGE_COMMIT ") loaded (SA-MP plugin) - by " VOICE_BRIDGE_AUTHOR " - " VOICE_BRIDGE_URL, VOICE_BRIDGE_VERSION);
 	return true;
 }
 

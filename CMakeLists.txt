@@ -47,6 +47,19 @@ include(CTest)
 
 set(VOICE_BRIDGE_SHARED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shared")
 
+# Commit the binaries were built from, shown in the logs ("dirty" = local
+# changes not committed), so a deployed build can be identified.
+set(VOICE_BRIDGE_COMMIT "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+	execute_process(COMMAND "${GIT_EXECUTABLE}" describe --always --dirty --abbrev=7
+		WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" OUTPUT_VARIABLE VOICE_BRIDGE_COMMIT_OUT
+		OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE VOICE_BRIDGE_GIT_RESULT)
+	if(VOICE_BRIDGE_GIT_RESULT EQUAL 0 AND VOICE_BRIDGE_COMMIT_OUT)
+		set(VOICE_BRIDGE_COMMIT "${VOICE_BRIDGE_COMMIT_OUT}")
+	endif()
+endif()
+
 configure_file(
 	"${CMAKE_CURRENT_SOURCE_DIR}/server/src/version.hpp.in"
 	"${CMAKE_CURRENT_BINARY_DIR}/generated/version.hpp"

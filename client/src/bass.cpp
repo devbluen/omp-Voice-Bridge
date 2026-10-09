@@ -76,6 +76,7 @@ bool Load()
 		return false;
 	}
 	g_api.ChannelSetDSP = reinterpret_cast<decltype(g_api.ChannelSetDSP)>(GetProcAddress(module, "BASS_ChannelSetDSP"));
+	g_api.ChannelGetAttribute = reinterpret_cast<decltype(g_api.ChannelGetAttribute)>(GetProcAddress(module, "BASS_ChannelGetAttribute"));
 	const DWORD version = g_api.GetVersion();
 	Log("bass.dll %u.%u.%u.%u loaded", HIBYTE(HIWORD(version)), LOBYTE(HIWORD(version)), HIBYTE(LOWORD(version)), LOBYTE(LOWORD(version)));
 	g_loaded = true;

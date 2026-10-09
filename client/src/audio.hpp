@@ -75,6 +75,8 @@ public:
 	// Main thread, once per frame
 	void update(const game::Listener& listener, bool serverPositions);
 	std::vector<SpeakerInfo> speakers();
+	// One line per voice channel, for the log (vehicle diagnostics).
+	std::vector<std::string> diagnostics(const game::Listener& listener);
 
 	void setPlayerVolume(uint16_t player, float volume);
 	float playerVolume(uint16_t player) const;

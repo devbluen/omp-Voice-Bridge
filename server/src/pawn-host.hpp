@@ -32,6 +32,7 @@ public:
 	void onTransport(uint16_t player, uint8_t transport) override;
 	void onTalking(uint16_t player, bool talking) override;
 	void onClientStatus(uint16_t player, bool micAvailable, bool micMuted, bool soundMuted) override;
+	void onVoiceIgnored(uint16_t player, uint8_t reason) override;
 
 private:
 	// Calls `name` in every script that implements it.  Arguments are pushed

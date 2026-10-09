@@ -21,6 +21,10 @@ struct Listener
 	Vec3 front;
 	Vec3 up;
 	bool valid = false;
+	// Diagnostics
+	Vec3 camera;
+	bool cameraValid = false;
+	bool inVehicle = false;
 };
 
 // Orientation of the character or of the camera (what the player sees).

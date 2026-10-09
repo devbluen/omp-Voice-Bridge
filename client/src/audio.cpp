@@ -921,6 +921,46 @@ void Audio::update(const game::Listener& listener, bool serverPositions)
 	}
 }
 
+std::vector<std::string> Audio::diagnostics(const game::Listener& listener)
+{
+	std::vector<std::string> lines;
+	if (!ready_)
+	{
+		lines.emplace_back("audio not ready");
+		return lines;
+	}
+	const auto& api = bass::Get();
+	const uint64_t t = now();
+	char text[400];
+	std::lock_guard<std::mutex> lock(mutex_);
+	std::snprintf(text, sizeof(text), "BASS stream volume %u/10000, %zu stream(s)", static_cast<unsigned>(api.GetConfig(bass::kConfigGlobalStreamVolume)),
+		streams_.size());
+	lines.emplace_back(text);
+	for (const auto& entry : streams_)
+	{
+		const Stream& stream = entry.second;
+		const float distance = length(sub(stream.position, listener.position));
+		std::snprintf(text, sizeof(text), "  stream %u kind %d range %.0f m: source (%.1f, %.1f, %.1f) known %d, %.1f m away, gain %.2f, %zu channel(s)",
+			stream.id, static_cast<int>(stream.kind), stream.distance, stream.position.x, stream.position.y, stream.position.z, stream.sourceKnown ? 1 : 0,
+			distance, stream.gain, stream.channels.size());
+		lines.emplace_back(text);
+		for (const auto& channel : stream.channels)
+		{
+			float volume = -1.f;
+			if (api.ChannelGetAttribute)
+			{
+				api.ChannelGetAttribute(channel->handle, bass::kAttribVol, &volume);
+			}
+			const DWORD waiting = api.StreamPutData(channel->handle, nullptr, 0);
+			std::snprintf(text, sizeof(text), "    speaker %u: last packet %llu ms ago, BASS state %u, volume %.2f, waiting %u bytes, level %.0f dB",
+				channel->speaker, static_cast<unsigned long long>(t - channel->lastPacket), static_cast<unsigned>(api.ChannelIsActive(channel->handle)),
+				volume, static_cast<unsigned>(waiting), channel->level);
+			lines.emplace_back(text);
+		}
+	}
+	return lines;
+}
+
 std::vector<DWORD> Audio::channelHandles()
 {
 	std::vector<DWORD> handles;

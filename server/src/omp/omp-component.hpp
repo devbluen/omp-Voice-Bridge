@@ -5,6 +5,7 @@
 #pragma once
 
 #include "../voice-server.hpp"
+#include <Server/Components/Console/console.hpp>
 #include <Server/Components/Objects/objects.hpp>
 #include <Server/Components/Pawn/pawn.hpp>
 #include <Server/Components/Vehicles/vehicles.hpp>
@@ -16,6 +17,7 @@ class VoiceBridgeComponent final
 	, public PlayerConnectEventHandler
 	, public CoreEventHandler
 	, public NetworkInEventHandler
+	, public ConsoleEventHandler
 	, public vbs::ITransport
 	, public vbs::IWorld
 {
@@ -49,6 +51,10 @@ public:
 	bool onReceivePacket(IPlayer& peer, int id, NetworkBitStream& bs) override;
 	bool onReceiveRPC(IPlayer& peer, int id, NetworkBitStream& bs) override;
 
+	// ConsoleEventHandler: "voice [playerid]" prints the voice state of players
+	bool onConsoleText(StringView command, StringView parameters, const ConsoleCommandSenderData& sender) override;
+	void onConsoleCommandListRequest(FlatHashSet<StringView>& commands) override;
+
 	// vbs::ITransport
 	bool sendPacket(uint16_t player, const uint8_t* data, std::size_t size, bool reliable) override;
 	uint32_t playerIp(uint16_t player) override;
@@ -69,6 +75,7 @@ private:
 	IPawnComponent* pawn_ = nullptr;
 	IVehiclesComponent* vehicles_ = nullptr;
 	IObjectsComponent* objects_ = nullptr;
+	IConsoleComponent* console_ = nullptr;
 	bool networkHooked_ = false;
 	bool started_ = false;
 	bool active_ = false;

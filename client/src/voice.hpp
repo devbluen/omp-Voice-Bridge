@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include "game.hpp"
 #include "rakclient.hpp"
 #include <windows.h>
 #include <atomic>
@@ -127,6 +128,10 @@ private:
 	std::set<uint8_t> pressed_;
 	bool vadKeyDown_ = false;
 	bool pushToTalkCue_ = false;
+	bool wasInVehicle_ = false;
+	uint64_t lastVehicleLog_ = 0;
+	std::atomic<uint32_t> voicePackets_ { 0 }; // received since start (diagnostics)
+	void logVehicleDiagnostics(const game::Listener& listener, uint64_t t);
 	uint64_t sessionStart_ = 0;
 	uint64_t lastKeepAlive_ = 0;
 	bool udpConfirmed_ = false;

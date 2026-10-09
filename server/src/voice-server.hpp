@@ -40,6 +40,7 @@ struct Pose
 	vb::Vec3 position {};
 	int world = 0;
 	int interior = 0;
+	int vehicle = -1; // vehicle the player is in (diagnostics; -1 = on foot or unknown)
 };
 
 class ITransport
@@ -74,6 +75,17 @@ public:
 	virtual void onTransport(uint16_t player, uint8_t transport) = 0;
 	virtual void onTalking(uint16_t player, bool talking) = 0;
 	virtual void onClientStatus(uint16_t player, bool micAvailable, bool micMuted, bool soundMuted) = 0;
+	// Voice from the player reached the server but was dropped (VoiceIgnored).
+	virtual void onVoiceIgnored(uint16_t player, uint8_t reason) { (void)player, (void)reason; }
+};
+
+// Reasons for IScriptEvents::onVoiceIgnored (VB_VOICE_IGNORED_* in Pawn).
+enum class VoiceIgnored : uint8_t
+{
+	ClientNotAllowed = 1,
+	Muted = 2,
+	NoKey = 3,
+	NotSpeaker = 4,
 };
 
 enum class ClientType : uint8_t
@@ -193,6 +205,11 @@ struct Player
 	// SampVoice listeners hear streams that follow a player as point streams
 	// moved by the server (last position sent, per stream).
 	std::map<uint32_t, vb::Vec3> legacyPoints;
+	// Streams sent to this SampVoice listener without 3D because the
+	// listener or the speaker is in a vehicle: inside vehicles GTA leaves the
+	// ped matrix stale and the client mutes 3D voice it places with it.
+	// Range is still decided by the server (see legacyWantsFlat).
+	std::set<uint32_t> legacyFlat;
 	std::bitset<kMaxPlayers> blocked;
 
 	bool talking = false;
@@ -343,6 +360,7 @@ private:
 
 	std::vector<uint8_t> createPacketFor(const Stream& stream) const;
 	void sendStreamState(const Stream& stream, uint16_t player);
+	bool legacyWantsFlat(uint16_t listener, const Stream& stream);
 	void sendParameter(const Stream& stream, uint8_t parameter, const ParameterState& state, uint16_t player);
 	float currentValue(const ParameterState& state) const;
 	bool attachListenerLocked(Stream& stream, uint16_t player);
@@ -355,6 +373,13 @@ private:
 	void tickTalking();
 	void tickKeepAlive();
 	void tickDiagnostics();
+
+public:
+	// Voice state of one player (or all with plugin when player is -1), one
+	// line each: the "voice" console command.
+	std::vector<std::string> statusReport(int player);
+
+private:
 	void processWorkerEvents();
 
 	void handleControl(uint16_t player, uint16_t type, const uint8_t* payload, std::size_t size);
@@ -393,6 +418,23 @@ private:
 	uint32_t nextWireEffect_ = 1;
 
 	std::array<std::atomic<uint64_t>, kMaxPlayers> udpAddress_ {};
+	// Diagnostics: voice packets sent to / accepted from each player.
+	std::array<std::atomic<uint32_t>, kMaxPlayers> deliveredTo_ {};
+	std::array<std::atomic<uint32_t>, kMaxPlayers> receivedFrom_ {};
+	struct VehicleWatch
+	{
+		int vehicle = -1;
+		uint64_t lastLog = 0;
+		uint32_t delivered = 0;
+		uint32_t received = 0;
+	};
+	std::array<VehicleWatch, kMaxPlayers> vehicleWatch_ {};
+	// Last time a dropped-voice reason was logged for a player (rate limit).
+	std::array<std::atomic<uint64_t>, kMaxPlayers> dropLogged_ {};
+	void logDroppedVoice(uint16_t player, VoiceIgnored reason, const char* text);
+	std::vector<std::pair<uint16_t, uint8_t>> droppedVoice_; // under workerEventsMutex_
+	void tickVehicleDiagnostics(uint64_t t);
+	std::string describePlayer(uint16_t player, uint32_t deliveredSince, uint32_t receivedSince, const char* window);
 	std::array<std::atomic<uint64_t>, kMaxPlayers> lastVoiceMs_ {};
 	std::array<std::atomic<uint64_t>, kMaxPlayers> lastUdpMs_ {};
 	std::array<std::atomic<bool>, kMaxPlayers> ipReported_ {};

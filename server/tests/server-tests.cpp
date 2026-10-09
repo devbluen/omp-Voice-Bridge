@@ -6,6 +6,8 @@
 
 #include "voice-server.hpp"
 #include "log.hpp"
+#include <iterator>
+#include <fstream>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -125,6 +127,8 @@ public:
 	void onTransport(uint16_t player, uint8_t transport) override { transports.emplace_back(player, transport); }
 	void onTalking(uint16_t player, bool value) override { talking.emplace_back(player, value); }
 	void onClientStatus(uint16_t, bool, bool, bool) override { }
+	std::vector<std::pair<uint16_t, uint8_t>> ignored;
+	void onVoiceIgnored(uint16_t player, uint8_t reason) override { ignored.emplace_back(player, reason); }
 };
 
 struct Client
@@ -318,10 +322,13 @@ void testVoiceRouting()
 	pump(50);
 	CHECK(server.isTalking(0));
 
-	// Without a key or recording the speaker is ignored.
+	// Without a key or recording the speaker is ignored, and the script is told why.
 	CHECK(server.removeKey(0, 0x42));
 	client0.send(vb::voice::voicePacket, opus, 6);
 	CHECK(!client1.receiveVoice(header, payload, 3));
+	pump(50);
+	CHECK(events.ignored.size() == 1 && events.ignored[0].first == 0
+		&& events.ignored[0].second == static_cast<uint8_t>(VoiceIgnored::NoKey));
 	CHECK(server.startRecord(0));
 	client0.send(vb::voice::voicePacket, opus, 7);
 	CHECK(client1.receiveVoice(header, payload));
@@ -400,7 +407,9 @@ void testDynamicStreams()
 	FakeWorld world;
 	FakeEvents events;
 	Config config;
-	config.logFile = "off"; // no voice log file from the tests
+	config.logFile = "dynamic-streams-test.log"; // checked below, then removed
+	config.debug = true; // the details are only logged in debug mode
+	std::remove(config.logFile.c_str());
 	config.gamePort = 65535;
 	config.bind = "127.0.0.1";
 	config.streamTickMs = 20;
@@ -459,12 +468,67 @@ void testDynamicStreams()
 	pump(80); // standing still: no more updates
 	CHECK(transport.controls(2, vb::ctl::updateLPStreamPosition).size() == sent);
 
+	// Vehicle diagnostics: entering a vehicle is logged with what the player
+	// hears, and the console report describes the same.
+	world.players[2].vehicle = 412;
+	pump(1100);
+	const auto report = server.statusReport(2);
+	CHECK(report.size() == 1 && report[0].find("in vehicle 412") != std::string::npos
+		&& report[0].find("player 0") != std::string::npos && report[0].find("voice sent TO him") != std::string::npos);
+
+	// Inside a vehicle the SampVoice client mutes 3D voice (it places itself
+	// at the stale ped matrix): the stream is recreated without 3D, and as a
+	// 3D point again when the player gets out.
+	const auto flatStreams = transport.controls(2, vb::ctl::createGStream);
+	CHECK(!flatStreams.empty());
+	if (!flatStreams.empty())
+	{
+		vb::CreateGStreamPacket flatStream {};
+		std::memcpy(&flatStream, flatStreams.back().data(), sizeof(flatStream));
+		CHECK(flatStream.stream == stream);
+	}
+	CHECK(server.hasListener(stream, 2));
+	const std::size_t pointsBefore = transport.controls(2, vb::ctl::createLPStream).size();
+	world.players[2].vehicle = -1;
+	pump(80);
+	CHECK(transport.controls(2, vb::ctl::createLPStream).size() == pointsBefore + 1);
+
+	// The same when it is the speaker who is in a vehicle.
+	const std::size_t flatBefore = transport.controls(2, vb::ctl::createGStream).size();
+	world.players[0].vehicle = 77;
+	pump(80);
+	CHECK(transport.controls(2, vb::ctl::createGStream).size() == flatBefore + 1);
+	CHECK(server.hasListener(stream, 2));
+	world.players[0].vehicle = -1;
+	pump(80);
+	CHECK(transport.controls(2, vb::ctl::createLPStream).size() == pointsBefore + 2);
+
 	CHECK(server.setStreamMaxListeners(stream, 1));
 	world.players[1].position.x = 2.f;
 	pump(60);
 	CHECK(server.listenerCount(stream) == 1);
 
 	server.stop();
+	{
+		// The voice log explains every listener change (who, where, why).
+		std::ifstream log(config.logFile);
+		const std::string text((std::istreambuf_iterator<char>(log)), std::istreambuf_iterator<char>());
+		CHECK(text.find("starts hearing - player 1 at (5.0, 0.0, 0.0) world 0 interior 0 on foot, 5.0 m") != std::string::npos);
+		CHECK(text.find("stops hearing - player 1 at (30.0, 0.0, 0.0)") != std::string::npos);
+		CHECK(text.find("ENTERED a vehicle - player 2 (SampVoice") != std::string::npos);
+	}
+	{
+		// Without voice_debug the details stay out of the file; info stays.
+		vbs::LogSetDebug(false);
+		vbs::LogDebug("detail line that must not be written");
+		vbs::LogInfo("info line that must be written");
+		vbs::LogSetFile("");
+		std::ifstream log(config.logFile);
+		const std::string text((std::istreambuf_iterator<char>(log)), std::istreambuf_iterator<char>());
+		CHECK(text.find("detail line that must not be written") == std::string::npos);
+		CHECK(text.find("info line that must be written") != std::string::npos);
+	}
+	std::remove(config.logFile.c_str());
 }
 
 void testSequencedEnvelope()

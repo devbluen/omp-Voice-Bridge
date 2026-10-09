@@ -69,6 +69,7 @@ struct Api
 	DWORD(WINAPI* ChannelGetData)(DWORD, void*, DWORD) = nullptr;
 	HFX(WINAPI* ChannelSetFX)(DWORD, DWORD, int) = nullptr;
 	DWORD(WINAPI* ChannelSetDSP)(DWORD, DspProc, void*, int) = nullptr; // optional
+	BOOL(WINAPI* ChannelGetAttribute)(DWORD, DWORD, float*) = nullptr; // optional (diagnostics)
 	BOOL(WINAPI* ChannelRemoveFX)(DWORD, HFX) = nullptr;
 	BOOL(WINAPI* FXSetParameters)(HFX, const void*) = nullptr;
 	BOOL(WINAPI* RecordGetDeviceInfo)(DWORD, DeviceInfo*) = nullptr;

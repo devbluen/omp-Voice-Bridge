@@ -30,6 +30,12 @@
 #define VB_TRANSPORT_UDP        (1)
 #define VB_TRANSPORT_TUNNEL     (2)
 
+// VB_OnPlayerVoiceIgnored: why the player's voice was dropped
+#define VB_VOICE_IGNORED_CLIENT_NOT_ALLOWED (1) // client type blocked (VB_AllowClientType / voice_allow_*)
+#define VB_VOICE_IGNORED_MUTED              (2) // VB_MutePlayer / SvMutePlayerEnable
+#define VB_VOICE_IGNORED_NO_KEY             (3) // no talk key (VB_AddKey) and not recording
+#define VB_VOICE_IGNORED_NOT_SPEAKER        (4) // talking, but not a speaker of any stream (VB_AddSpeaker)
+
 // Compare with VB_GetClientBuild: VB_GetClientBuild(playerid) < VB_VERSION(1, 2, 0)
 #define VB_VERSION(%0,%1,%2)    ((%0) * 10000 + (%1) * 100 + (%2))
 
@@ -217,6 +223,8 @@ forward VB_OnPlayerTransportChange(playerid, transport);
 forward VB_OnPlayerStartTalking(playerid);
 forward VB_OnPlayerStopTalking(playerid);
 forward VB_OnPlayerClientStatus(playerid, bool:micavailable, bool:micmuted, bool:soundmuted);
+// The player talks but the voice is dropped (at most once every 10 s per player).
+forward VB_OnPlayerVoiceIgnored(playerid, reason);
 
 // ===========================================================================
 //  Internal - SA-MP: the plugin reads positions through these natives

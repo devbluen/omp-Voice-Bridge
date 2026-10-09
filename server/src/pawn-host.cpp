@@ -88,6 +88,11 @@ void PawnHost::onTalking(uint16_t player, bool talking)
 	call(talking ? "VB_OnPlayerStartTalking" : "VB_OnPlayerStopTalking", { static_cast<cell>(player) });
 }
 
+void PawnHost::onVoiceIgnored(uint16_t player, uint8_t reason)
+{
+	call("VB_OnPlayerVoiceIgnored", { static_cast<cell>(player), static_cast<cell>(reason) });
+}
+
 void PawnHost::onClientStatus(uint16_t player, bool micAvailable, bool micMuted, bool soundMuted)
 {
 	call("VB_OnPlayerClientStatus", { static_cast<cell>(player), static_cast<cell>(micAvailable), static_cast<cell>(micMuted), static_cast<cell>(soundMuted) });

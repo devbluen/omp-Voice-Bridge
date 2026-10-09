@@ -8,6 +8,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <random>
 
@@ -45,7 +46,6 @@ void openLogFile(const std::string& setting)
 	{
 		LogSetFile("voice-bridge.log");
 	}
-	LogDebug("---------------- voice server starting ----------------");
 }
 
 template <typename T>
@@ -59,6 +59,21 @@ void appendString(std::vector<uint8_t>& buffer, const std::string& text)
 {
 	buffer.insert(buffer.end(), text.begin(), text.end());
 	buffer.push_back(0);
+}
+
+std::string describeSource(const Stream& stream)
+{
+	switch (StreamTarget(stream.type))
+	{
+	case TargetKind::Player:
+		return "follows player " + std::to_string(stream.target);
+	case TargetKind::Vehicle:
+		return "follows vehicle " + std::to_string(stream.target);
+	case TargetKind::Object:
+		return "follows object " + std::to_string(stream.target);
+	default:
+		return "at a point";
+	}
 }
 
 float distanceBetween(const vb::Vec3& a, const vb::Vec3& b)
@@ -264,6 +279,7 @@ void VoiceServer::stop()
 		std::lock_guard<std::mutex> eventLock(workerEventsMutex_);
 		identified_.clear();
 		ipMismatches_.clear();
+		droppedVoice_.clear();
 	}
 }
 
@@ -306,6 +322,7 @@ void VoiceServer::tick()
 	{
 		lastDiagnostics_ = t;
 		tickDiagnostics();
+		tickVehicleDiagnostics(t);
 	}
 	flushOutbox();
 }
@@ -466,6 +483,10 @@ void VoiceServer::resetPlayer(uint16_t player, bool notifyScripts)
 		lastUdpMs_[player] = 0;
 		ipReported_[player] = false;
 		lockedIp_[player] = 0;
+		deliveredTo_[player] = 0;
+		dropLogged_[player] = 0;
+		receivedFrom_[player] = 0;
+		vehicleWatch_[player] = VehicleWatch {};
 	}
 	{
 		std::lock_guard<std::mutex> eventLock(workerEventsMutex_);
@@ -1210,11 +1231,35 @@ void VoiceServer::sendParameter(const Stream& stream, uint8_t parameter, const P
 	queueControl(player, vb::ctl::setStreamParameter, &packet, sizeof(packet));
 }
 
+bool VoiceServer::legacyWantsFlat(uint16_t listener, const Stream& stream)
+{
+	const TargetKind kind = StreamTarget(stream.type);
+	if (!world_ || kind == TargetKind::None)
+	{
+		return false;
+	}
+	Pose pose;
+	if (world_->playerPose(listener, pose) && pose.vehicle >= 0)
+	{
+		return true;
+	}
+	return kind == TargetKind::Player && world_->playerPose(stream.target, pose) && pose.vehicle >= 0;
+}
+
 void VoiceServer::sendStreamState(const Stream& stream, uint16_t player)
 {
 	Player& p = players_[player];
 	Pose pose;
-	if (!p.extended && StreamTarget(stream.type) == TargetKind::Player && sourcePose(stream, pose))
+	if (!p.extended && legacyWantsFlat(player, stream))
+	{
+		std::vector<uint8_t> payload;
+		append(payload, vb::CreateGStreamPacket { stream.id, stream.color });
+		appendString(payload, stream.name);
+		queueControl(player, vb::ctl::createGStream, payload);
+		p.legacyPoints.erase(stream.id);
+		p.legacyFlat.insert(stream.id);
+	}
+	else if (!p.extended && StreamTarget(stream.type) == TargetKind::Player && sourcePose(stream, pose))
 	{
 		// The SampVoice client places a "stream at player" at that player's
 		// ped matrix, which GTA does not update inside a vehicle: the voice
@@ -1792,6 +1837,24 @@ void VoiceServer::tickDynamicStreams()
 			return distance <= stream.distance;
 		};
 
+		// Voice log details: who starts/stops hearing which stream, and why.
+		const auto describe = [&](uint16_t player, const Pose* pose, float distance)
+		{
+			char text[200];
+			if (!pose)
+			{
+				std::snprintf(text, sizeof(text), "player %u: position unknown", player);
+			}
+			else
+			{
+				std::snprintf(text, sizeof(text), "player %u at (%.1f, %.1f, %.1f) world %d interior %d%s, %.1f m from the source at (%.1f, %.1f, %.1f) world %d",
+					player, pose->position.x, pose->position.y, pose->position.z, pose->world, pose->interior,
+					pose->vehicle >= 0 ? (" in vehicle " + std::to_string(pose->vehicle)).c_str() : " on foot", distance, source.position.x,
+					source.position.y, source.position.z, source.world);
+			}
+			return std::string(text);
+		};
+
 		std::size_t kept = 0;
 		for (uint16_t listener : stream.listeners)
 		{
@@ -1800,6 +1863,15 @@ void VoiceServer::tickDynamicStreams()
 			if (listener == excluded || at < 0 || !audible(candidates[at].pose, distance))
 			{
 				change.detach.push_back(listener);
+				if (listener != excluded)
+				{
+					if (at >= 0 && distance == 0.f)
+					{
+						distance = distanceBetween(candidates[at].pose.position, source.position);
+					}
+					LogDebug("stream %u (%s): stops hearing - %s", stream.id, describeSource(stream).c_str(),
+						describe(listener, at >= 0 ? &candidates[at].pose : nullptr, distance).c_str());
+				}
 			}
 			else
 			{
@@ -1827,6 +1899,8 @@ void VoiceServer::tickDynamicStreams()
 				}
 				change.attach.push_back(near.second);
 				++kept;
+				LogDebug("stream %u (%s): starts hearing - %s", stream.id, describeSource(stream).c_str(),
+					describe(near.second, &candidates[index[near.second]].pose, near.first).c_str());
 			}
 		}
 		if (!change.detach.empty() || !change.attach.empty())
@@ -1879,7 +1953,39 @@ void VoiceServer::tickPositions()
 	for (uint16_t id = 0; id < kMaxPlayers; ++id)
 	{
 		Player& legacy = players_[id];
-		if (!legacy.plugin || legacy.extended || legacy.legacyPoints.empty())
+		if (!legacy.plugin || legacy.extended)
+		{
+			continue;
+		}
+		// Recreate a stream in the other form when a vehicle starts or stops
+		// being involved (listener or speaker inside one).
+		for (uint32_t streamId : legacy.listenerStreams)
+		{
+			const Stream* stream = findStream(streamId);
+			if (!stream || StreamTarget(stream->type) == TargetKind::None)
+			{
+				continue;
+			}
+			const bool want = legacyWantsFlat(id, *stream);
+			const bool flat = legacy.legacyFlat.count(streamId) != 0;
+			if (want == flat)
+			{
+				continue;
+			}
+			legacy.legacyFlat.erase(streamId);
+			legacy.legacyPoints.erase(streamId);
+			const vb::DeleteStreamPacket remove { streamId };
+			queueControl(id, vb::ctl::deleteStream, &remove, sizeof(remove));
+			sendStreamState(*stream, id);
+			LogDebug("player %u (SampVoice) hears stream %u (%s) %s", id, streamId, describeSource(*stream).c_str(),
+				want ? "without 3D now: a vehicle is involved (the client mutes 3D voice in vehicles)" : "in 3D again");
+		}
+		for (auto it = legacy.legacyFlat.begin(); it != legacy.legacyFlat.end();)
+		{
+			const Stream* stream = findStream(*it);
+			it = !stream || !stream->listenerMask.test(id) ? legacy.legacyFlat.erase(it) : std::next(it);
+		}
+		if (legacy.legacyPoints.empty())
 		{
 			continue;
 		}
@@ -1987,6 +2093,19 @@ void VoiceServer::tickTalking()
 		if (talking)
 		{
 			broadcastName(id);
+			std::string streams;
+			for (uint32_t streamId : p.speakerStreams)
+			{
+				if (const Stream* stream = findStream(streamId))
+				{
+					streams += " [stream " + std::to_string(streamId) + ": " + describeSource(*stream) + ", heard by " + std::to_string(stream->listeners.size()) + "]";
+				}
+			}
+			LogDebug("player %u started talking, speaks in%s", id, streams.empty() ? " no stream" : streams.c_str());
+		}
+		else
+		{
+			LogDebug("player %u stopped talking", id);
 		}
 		if (events_)
 		{
@@ -2010,6 +2129,123 @@ void VoiceServer::tickKeepAlive()
 			}
 		}
 	}
+}
+
+std::string VoiceServer::describePlayer(uint16_t id, uint32_t deliveredSince, uint32_t receivedSince, const char* window)
+{
+	const Player& p = players_[id];
+	Pose pose;
+	const bool posed = world_ && world_->playerPose(id, pose);
+	const uint64_t address = udpAddress_[id];
+	char head[320];
+	std::snprintf(head, sizeof(head), "player %u (%s, voice %s%s): %s at (%.1f, %.1f, %.1f) world %d | voice sent TO him %s: %u packet(s), FROM him: %u",
+		id, p.clientType == ClientType::VoiceBridge ? "Voice Bridge" : p.clientType == ClientType::SampVoice ? "SampVoice" : "no voice client",
+		transportName(p.transport), p.transport == vb::transport::udp && !address ? ", no UDP address" : "",
+		!posed ? "position unknown" : pose.vehicle >= 0 ? ("in vehicle " + std::to_string(pose.vehicle)).c_str() : "on foot", pose.position.x, pose.position.y,
+		pose.position.z, pose.world, window, deliveredSince, receivedSince);
+	std::string line = head;
+	line += " | hears";
+	if (p.listenerStreams.empty())
+	{
+		line += " nothing";
+	}
+	for (uint32_t streamId : p.listenerStreams)
+	{
+		const Stream* stream = findStream(streamId);
+		if (!stream)
+		{
+			continue;
+		}
+		char item[160];
+		Pose source;
+		if (StreamTarget(stream->type) == TargetKind::Player)
+		{
+			const bool known = sourcePose(*stream, source);
+			std::snprintf(item, sizeof(item), " [stream %u: player %u, %s, %s]", streamId, stream->target,
+				known && posed ? (std::to_string(static_cast<int>(distanceBetween(source.position, pose.position))) + " m").c_str() : "? m",
+				validPlayer(stream->target) && players_[stream->target].talking ? "talking" : "silent");
+		}
+		else
+		{
+			std::snprintf(item, sizeof(item), " [stream %u: %s, %zu speaker(s)]", streamId, describeSource(*stream).c_str(), stream->speakers.size());
+		}
+		line += item;
+	}
+	return line;
+}
+
+// A player entering/leaving a vehicle, and every 5 s inside one, is written to
+// the voice log with what they hear and how much voice the server sent them.
+void VoiceServer::tickVehicleDiagnostics(uint64_t t)
+{
+	if (!world_)
+	{
+		return;
+	}
+	for (uint16_t id = 0; id < kMaxPlayers; ++id)
+	{
+		VehicleWatch& watch = vehicleWatch_[id];
+		if (!players_[id].plugin)
+		{
+			watch = VehicleWatch {};
+			continue;
+		}
+		Pose pose;
+		if (!world_->playerPose(id, pose))
+		{
+			continue;
+		}
+		const bool changed = pose.vehicle != watch.vehicle;
+		if (!changed && (pose.vehicle < 0 || t - watch.lastLog < 5000))
+		{
+			continue;
+		}
+		const uint32_t delivered = deliveredTo_[id];
+		const uint32_t received = receivedFrom_[id];
+		const char* event = !changed ? "still in a vehicle" : pose.vehicle >= 0 ? "ENTERED a vehicle" : "LEFT the vehicle";
+		LogDebug("%s - %s", event, describePlayer(id, delivered - watch.delivered, received - watch.received, "since the last line").c_str());
+		watch.vehicle = pose.vehicle;
+		watch.lastLog = t;
+		watch.delivered = delivered;
+		watch.received = received;
+	}
+}
+
+std::vector<std::string> VoiceServer::statusReport(int player)
+{
+	std::vector<std::string> lines;
+	for (uint16_t id = 0; id < kMaxPlayers; ++id)
+	{
+		if ((player >= 0 && id != player) || (player < 0 && !players_[id].plugin && players_[id].clientType == ClientType::None))
+		{
+			continue;
+		}
+		if (!players_[id].connected)
+		{
+			continue;
+		}
+		lines.push_back(describePlayer(id, deliveredTo_[id], receivedFrom_[id], "in total"));
+	}
+	if (lines.empty())
+	{
+		lines.emplace_back(player >= 0 ? "no such player with voice" : "no players with voice");
+	}
+	return lines;
+}
+
+// Called from the UDP thread too: the script callback is queued for the
+// server thread (processWorkerEvents).  At most once per 10 s per player.
+void VoiceServer::logDroppedVoice(uint16_t player, VoiceIgnored reason, const char* text)
+{
+	const uint64_t t = now();
+	if (t - dropLogged_[player].load() < 10000)
+	{
+		return;
+	}
+	dropLogged_[player] = t;
+	LogDebug("voice from player %u is ignored: %s", player, text);
+	std::lock_guard<std::mutex> lock(workerEventsMutex_);
+	droppedVoice_.emplace_back(player, static_cast<uint8_t>(reason));
 }
 
 void VoiceServer::tickDiagnostics()
@@ -2058,10 +2294,19 @@ void VoiceServer::processWorkerEvents()
 {
 	std::vector<uint16_t> identified;
 	std::vector<std::pair<uint16_t, uint32_t>> mismatches;
+	std::vector<std::pair<uint16_t, uint8_t>> dropped;
 	{
 		std::lock_guard<std::mutex> lock(workerEventsMutex_);
 		identified.swap(identified_);
 		mismatches.swap(ipMismatches_);
+		dropped.swap(droppedVoice_);
+	}
+	for (const auto& drop : dropped)
+	{
+		if (events_ && validPlayer(drop.first) && players_[drop.first].connected)
+		{
+			events_->onVoiceIgnored(drop.first, drop.second);
+		}
 	}
 
 	std::vector<uint32_t> blocked;
@@ -2322,8 +2567,19 @@ void VoiceServer::handleControl(uint16_t player, uint16_t type, const uint8_t* p
 void VoiceServer::relayVoice(uint16_t sender, uint32_t packid, const uint8_t* opus, uint16_t size)
 {
 	const Player& speaker = players_[sender];
-	if (!speaker.plugin || speaker.muted || (!speaker.recording && speaker.keys.empty()))
+	if (!speaker.plugin)
 	{
+		logDroppedVoice(sender, VoiceIgnored::ClientNotAllowed, "the player's voice client is not accepted");
+		return;
+	}
+	if (speaker.muted)
+	{
+		logDroppedVoice(sender, VoiceIgnored::Muted, "the player is muted (VB_MutePlayer / SvMutePlayerEnable)");
+		return;
+	}
+	if (!speaker.recording && speaker.keys.empty())
+	{
+		logDroppedVoice(sender, VoiceIgnored::NoKey, "the player has no talk key (VB_AddKey / SvAddKey) and is not recording");
 		return;
 	}
 	if (size == 0 || kHeaderSize + size > vb::kMaxVoicePacketSize)
@@ -2331,8 +2587,11 @@ void VoiceServer::relayVoice(uint16_t sender, uint32_t packid, const uint8_t* op
 		return;
 	}
 	lastVoiceMs_[sender] = now();
+	++receivedFrom_[sender];
 	if (speaker.speakerStreams.empty())
 	{
+		logDroppedVoice(sender, VoiceIgnored::NotSpeaker,
+			"the player is not a speaker of any stream (the script did not call VB_AddSpeaker / SvAttachSpeakerToStream)");
 		return;
 	}
 
@@ -2373,6 +2632,7 @@ void VoiceServer::relayVoice(uint16_t sender, uint32_t packid, const uint8_t* op
 
 void VoiceServer::deliverVoice(uint16_t listener, const Player& player, const uint8_t* packet, std::size_t size)
 {
+	++deliveredTo_[listener];
 	if (player.transport == vb::transport::tunnel)
 	{
 		std::lock_guard<std::mutex> lock(tunnelMutex_);

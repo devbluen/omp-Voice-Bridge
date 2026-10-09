@@ -38,7 +38,8 @@ struct Config
 	uint32_t maxPacketsPerSecond = 80;
 	bool debug = false;
 	// Voice log file.  Empty picks logs/voice-bridge.log (when a logs folder
-	// exists, as on open.mp) or voice-bridge.log; "off" disables it.
+	// exists, as on open.mp) or voice-bridge.log; "off" disables it.  The
+	// details (who hears whom, vehicles, dropped voice) need debug on.
 	std::string logFile;
 
 	// Client presentation (Voice Bridge clients only).
