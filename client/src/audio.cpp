@@ -808,13 +808,12 @@ void Audio::update(const game::Listener& listener, bool serverPositions, bool si
 	const game::Vec3 front = normalize(listener.front);
 
 	// SA-MP ties BASS's global stream volume to the GTA radio volume; at 0 the
-	// voice would be silent too.  Voice chat keeps it at the maximum; once
-	// samp.dll's BASS calls are redirected (bass::RedirectSampVolume) the
-	// radio volume goes to its audio streams only and this runs once.
+	// voice would be silent too.  Voice chat keeps it at the maximum.  Once
+	// bass::SampVolumeSeparated() SA-MP's value only reaches its own audio
+	// streams and this never runs; otherwise it is a tug of war every frame.
 	const DWORD streamVolume = api.GetConfig(bass::kConfigGlobalStreamVolume);
 	if (streamVolume != static_cast<DWORD>(-1) && streamVolume < 10000)
 	{
-		bass::NoteSampStreamVolume(streamVolume);
 		if (streamVolume != loggedStreamVolume_)
 		{
 			loggedStreamVolume_ = streamVolume;

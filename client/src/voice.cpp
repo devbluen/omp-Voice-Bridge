@@ -4,7 +4,6 @@
 
 #include "voice.hpp"
 #include "audio.hpp"
-#include "bass.hpp"
 #include "game.hpp"
 #include "log.hpp"
 #include "samp.hpp"
@@ -1050,14 +1049,6 @@ void VoiceClient::frame()
 	}
 
 	const uint64_t t = now();
-	if (!bass::SampVolumeRedirected() && volumeRedirectTries_ < 60 && t - lastVolumeRedirect_ >= 1000 && samp::Base())
-	{
-		lastVolumeRedirect_ = t;
-		if (!bass::RedirectSampVolume(reinterpret_cast<HMODULE>(samp::Base())) && ++volumeRedirectTries_ == 60)
-		{
-			Log("SA-MP audio stream volume could not be separated from voice chat");
-		}
-	}
 	skipSequenceGap(false);
 	updateTransport(t);
 	updateKeys(t);

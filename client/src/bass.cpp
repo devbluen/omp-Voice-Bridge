@@ -4,8 +4,9 @@
 
 #include "bass.hpp"
 #include "log.hpp"
-#include <algorithm>
 #include <atomic>
+#include <cstdint>
+#include <cstring>
 #include <mutex>
 
 namespace vbc::bass
@@ -14,6 +15,7 @@ namespace
 {
 Api g_api;
 bool g_loaded = false;
+void separateSampVolume(HMODULE module);
 
 template <typename T>
 bool resolve(HMODULE module, T& target, const char* name)
@@ -81,6 +83,10 @@ bool Load()
 	g_api.ChannelSetDSP = reinterpret_cast<decltype(g_api.ChannelSetDSP)>(GetProcAddress(module, "BASS_ChannelSetDSP"));
 	g_api.ChannelGetAttribute = reinterpret_cast<decltype(g_api.ChannelGetAttribute)>(GetProcAddress(module, "BASS_ChannelGetAttribute"));
 	const DWORD version = g_api.GetVersion();
+	if (version == 0x02040700)
+	{
+		separateSampVolume(module);
+	}
 	Log("bass.dll %u.%u.%u.%u loaded", HIBYTE(HIWORD(version)), LOBYTE(HIWORD(version)), HIBYTE(LOWORD(version)), LOBYTE(LOWORD(version)));
 	g_loaded = true;
 	return true;
@@ -93,14 +99,16 @@ using StreamCreateUrlFn = HSTREAM(WINAPI*)(const char*, DWORD, DWORD, void*, voi
 using SetAttributeFn = BOOL(WINAPI*)(DWORD, DWORD, float);
 using SlideAttributeFn = BOOL(WINAPI*)(DWORD, DWORD, float, DWORD);
 
+// Originals (trampolines once hooked).
 SetConfigFn g_realSetConfig = nullptr;
 StreamCreateUrlFn g_realStreamCreateUrl = nullptr;
 SetAttributeFn g_realSetAttribute = nullptr;
 SlideAttributeFn g_realSlideAttribute = nullptr;
 std::atomic<DWORD> g_sampVolume { 10000 };
-std::atomic<bool> g_redirected { false };
+bool g_separated = false;
 
-// SA-MP's audio streams and the volume each one asked for.
+// Audio streams created by others (SA-MP's PlayAudioStreamForPlayer) and the
+// volume each one asked for.
 struct SampStream
 {
 	HSTREAM handle = 0;
@@ -127,7 +135,9 @@ SampStream* findStream(DWORD handle)
 	return nullptr;
 }
 
-BOOL WINAPI sampSetConfig(DWORD option, DWORD value)
+// SA-MP sets the global stream volume to the GTA radio volume: keep it for
+// its audio streams only.  The mod itself calls the trampolines.
+BOOL WINAPI hookSetConfig(DWORD option, DWORD value)
 {
 	if (option != kConfigGlobalStreamVolume)
 	{
@@ -145,7 +155,7 @@ BOOL WINAPI sampSetConfig(DWORD option, DWORD value)
 	return TRUE;
 }
 
-HSTREAM WINAPI sampStreamCreateUrl(const char* url, DWORD offset, DWORD flags, void* proc, void* user)
+HSTREAM WINAPI hookStreamCreateUrl(const char* url, DWORD offset, DWORD flags, void* proc, void* user)
 {
 	const HSTREAM handle = g_realStreamCreateUrl(url, offset, flags, proc, user);
 	if (handle)
@@ -158,7 +168,7 @@ HSTREAM WINAPI sampStreamCreateUrl(const char* url, DWORD offset, DWORD flags, v
 	return handle;
 }
 
-BOOL WINAPI sampSetAttribute(DWORD handle, DWORD attribute, float value)
+BOOL WINAPI hookSetAttribute(DWORD handle, DWORD attribute, float value)
 {
 	if (attribute == kAttribVol)
 	{
@@ -172,7 +182,7 @@ BOOL WINAPI sampSetAttribute(DWORD handle, DWORD attribute, float value)
 	return g_realSetAttribute(handle, attribute, value);
 }
 
-BOOL WINAPI sampSlideAttribute(DWORD handle, DWORD attribute, float value, DWORD time)
+BOOL WINAPI hookSlideAttribute(DWORD handle, DWORD attribute, float value, DWORD time)
 {
 	if (attribute == kAttribVol && value >= 0.f)
 	{
@@ -186,95 +196,100 @@ BOOL WINAPI sampSlideAttribute(DWORD handle, DWORD attribute, float value, DWORD
 	return g_realSlideAttribute(handle, attribute, value, time);
 }
 
-// Replaces every stored pointer to `real` inside samp.dll's image (its
-// import table, rebuilt by its packer at runtime) with `hook`.
-int redirectPointers(uintptr_t begin, uintptr_t end, const void* real, const void* hook)
+bool startsWith(const void* code, const uint8_t* expected, std::size_t size)
 {
-	int replaced = 0;
-	uintptr_t address = begin;
-	while (address < end)
+	return code && std::memcmp(code, expected, size) == 0;
+}
+
+// Detours `target` to `hook`.  Its first `size` bytes must be whole, position
+// independent instructions (at least 5 bytes): they are copied to a
+// trampoline that jumps back after them.  Returns the trampoline.
+void* detour(void* target, std::size_t size, void* hook)
+{
+	auto* code = static_cast<uint8_t*>(target);
+	auto* trampoline = static_cast<uint8_t*>(VirtualAlloc(nullptr, 32, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE));
+	if (!trampoline)
 	{
-		MEMORY_BASIC_INFORMATION info {};
-		if (!VirtualQuery(reinterpret_cast<void*>(address), &info, sizeof(info)))
-		{
-			break;
-		}
-		const uintptr_t regionEnd = std::min<uintptr_t>(reinterpret_cast<uintptr_t>(info.BaseAddress) + info.RegionSize, end);
-		const DWORD readable = PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
-		if (info.State == MEM_COMMIT && (info.Protect & readable) && !(info.Protect & (PAGE_GUARD | PAGE_NOACCESS)))
-		{
-			for (uintptr_t slot = (address + 3) & ~uintptr_t(3); slot + sizeof(void*) <= regionEnd; slot += sizeof(void*))
-			{
-				if (*reinterpret_cast<const void* const*>(slot) != real)
-				{
-					continue;
-				}
-				DWORD previous = 0;
-				if (VirtualProtect(reinterpret_cast<void*>(slot), sizeof(void*), PAGE_EXECUTE_READWRITE, &previous))
-				{
-					*reinterpret_cast<const void**>(slot) = hook;
-					VirtualProtect(reinterpret_cast<void*>(slot), sizeof(void*), previous, &previous);
-					++replaced;
-				}
-			}
-		}
-		address = regionEnd;
+		return nullptr;
 	}
-	return replaced;
+	std::memcpy(trampoline, code, size);
+	trampoline[size] = 0xE9;
+	const auto back = static_cast<int32_t>(reinterpret_cast<intptr_t>(code + size) - reinterpret_cast<intptr_t>(trampoline + size + 5));
+	std::memcpy(trampoline + size + 1, &back, sizeof(back));
+
+	DWORD previous = 0;
+	if (!VirtualProtect(code, size, PAGE_EXECUTE_READWRITE, &previous))
+	{
+		VirtualFree(trampoline, 0, MEM_RELEASE);
+		return nullptr;
+	}
+	uint8_t patch[8];
+	std::memset(patch, 0x90, sizeof(patch));
+	patch[0] = 0xE9;
+	const auto jump = static_cast<int32_t>(reinterpret_cast<intptr_t>(hook) - reinterpret_cast<intptr_t>(code + 5));
+	std::memcpy(patch + 1, &jump, sizeof(jump));
+	std::memcpy(code, patch, size);
+	VirtualProtect(code, size, previous, &previous);
+	FlushInstructionCache(GetCurrentProcess(), code, size);
+	return trampoline;
+}
+
+// bass.dll 2.4.7 (the one installed with SA-MP).
+const uint8_t kSetConfigStart[] = { 0x8B, 0x4C, 0x24, 0x04, 0x8D, 0x44, 0x24, 0x08 }; // mov ecx,[esp+4]; lea eax,[esp+8]
+const uint8_t kStreamCreateUrlStart[] = { 0x55, 0x8B, 0xEC, 0x53, 0x56, 0x57 }; // push ebp; mov ebp,esp; push ebx; push esi; push edi
+const uint8_t kSetAttributeStart[] = { 0x55, 0x8B, 0xEC, 0x8B, 0x4D, 0x08 }; // push ebp; mov ebp,esp; mov ecx,[ebp+8]
+const uint8_t kSlideAttributeStart[] = { 0x55, 0x8B, 0xEC, 0x51, 0x8D, 0x45, 0xFC }; // push ebp; mov ebp,esp; push ecx; lea eax,[ebp-4]
+
+// SA-MP follows the GTA radio volume with BASS's global stream volume, which
+// also scales the voices; the mod used to force it back every frame and that
+// tug of war made audio streams (PlayAudioStreamForPlayer) choppy.  Called
+// from Load, before any voice channel exists.
+void separateSampVolume(HMODULE module)
+{
+	void* setConfig = reinterpret_cast<void*>(GetProcAddress(module, "BASS_SetConfig"));
+	void* createUrl = reinterpret_cast<void*>(GetProcAddress(module, "BASS_StreamCreateURL"));
+	void* setAttribute = reinterpret_cast<void*>(GetProcAddress(module, "BASS_ChannelSetAttribute"));
+	void* slideAttribute = reinterpret_cast<void*>(GetProcAddress(module, "BASS_ChannelSlideAttribute"));
+	if (!startsWith(setConfig, kSetConfigStart, sizeof(kSetConfigStart)) || !startsWith(createUrl, kStreamCreateUrlStart, sizeof(kStreamCreateUrlStart))
+		|| !startsWith(setAttribute, kSetAttributeStart, sizeof(kSetAttributeStart)))
+	{
+		Log("SA-MP audio stream volume not separated from voice chat (unknown bass.dll code)");
+		return;
+	}
+
+	// The current value is SA-MP's radio volume (or the default 10000).
+	const DWORD current = g_api.GetConfig(kConfigGlobalStreamVolume);
+	g_sampVolume = current <= 10000 ? current : 10000;
+
+	// The attribute hook first: the others call its trampoline.
+	g_realSetAttribute = reinterpret_cast<SetAttributeFn>(detour(setAttribute, sizeof(kSetAttributeStart), reinterpret_cast<void*>(&hookSetAttribute)));
+	if (!g_realSetAttribute)
+	{
+		return;
+	}
+	g_api.ChannelSetAttribute = g_realSetAttribute;
+	g_realStreamCreateUrl =
+		reinterpret_cast<StreamCreateUrlFn>(detour(createUrl, sizeof(kStreamCreateUrlStart), reinterpret_cast<void*>(&hookStreamCreateUrl)));
+	if (startsWith(slideAttribute, kSlideAttributeStart, sizeof(kSlideAttributeStart)))
+	{
+		g_realSlideAttribute =
+			reinterpret_cast<SlideAttributeFn>(detour(slideAttribute, sizeof(kSlideAttributeStart), reinterpret_cast<void*>(&hookSlideAttribute)));
+	}
+	g_realSetConfig = reinterpret_cast<SetConfigFn>(detour(setConfig, sizeof(kSetConfigStart), reinterpret_cast<void*>(&hookSetConfig)));
+	if (!g_realSetConfig)
+	{
+		return;
+	}
+	g_api.SetConfig = g_realSetConfig;
+	g_realSetConfig(kConfigGlobalStreamVolume, 10000);
+	g_separated = true;
+	Log("SA-MP audio stream volume separated from voice chat (radio volume %u/10000)", static_cast<unsigned>(g_sampVolume.load()));
 }
 }
 
-bool RedirectSampVolume(HMODULE samp)
+bool SampVolumeSeparated()
 {
-	if (g_redirected)
-	{
-		return true;
-	}
-	HMODULE module = GetModuleHandleA("bass.dll");
-	if (!g_loaded || !samp || !module)
-	{
-		return false;
-	}
-	g_realSetConfig = reinterpret_cast<SetConfigFn>(GetProcAddress(module, "BASS_SetConfig"));
-	g_realStreamCreateUrl = reinterpret_cast<StreamCreateUrlFn>(GetProcAddress(module, "BASS_StreamCreateURL"));
-	g_realSetAttribute = reinterpret_cast<SetAttributeFn>(GetProcAddress(module, "BASS_ChannelSetAttribute"));
-	g_realSlideAttribute = reinterpret_cast<SlideAttributeFn>(GetProcAddress(module, "BASS_ChannelSlideAttribute"));
-	if (!g_realSetConfig || !g_realStreamCreateUrl || !g_realSetAttribute)
-	{
-		return false;
-	}
-	const auto base = reinterpret_cast<uintptr_t>(samp);
-	const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(base);
-	const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS*>(base + dos->e_lfanew);
-	const uintptr_t end = base + nt->OptionalHeader.SizeOfImage;
-
-	// SetConfig first: until samp.dll has resolved it there is nothing to do.
-	const int config = redirectPointers(base, end, reinterpret_cast<const void*>(g_realSetConfig), reinterpret_cast<const void*>(&sampSetConfig));
-	if (!config)
-	{
-		return false;
-	}
-	const int create = redirectPointers(base, end, reinterpret_cast<const void*>(g_realStreamCreateUrl), reinterpret_cast<const void*>(&sampStreamCreateUrl));
-	const int attribute = redirectPointers(base, end, reinterpret_cast<const void*>(g_realSetAttribute), reinterpret_cast<const void*>(&sampSetAttribute));
-	const int slide = g_realSlideAttribute
-		? redirectPointers(base, end, reinterpret_cast<const void*>(g_realSlideAttribute), reinterpret_cast<const void*>(&sampSlideAttribute))
-		: 0;
-	Log("SA-MP audio stream volume separated from voice chat (%d/%d/%d/%d)", config, create, attribute, slide);
-	g_redirected = true;
-	return true;
-}
-
-bool SampVolumeRedirected()
-{
-	return g_redirected;
-}
-
-void NoteSampStreamVolume(DWORD volume)
-{
-	if (!g_redirected)
-	{
-		g_sampVolume = volume > 10000 ? 10000 : volume;
-	}
+	return g_separated;
 }
 
 bool Loaded()
