@@ -61,6 +61,7 @@ void LoadSettings()
 	const Settings defaults;
 	s.soundEnabled = readBool("SoundEnabled", defaults.soundEnabled);
 	s.volume = readInt("Volume", defaults.volume, 0, 200);
+	s.hearWhilePaused = readBool("HearWhilePaused", defaults.hearWhilePaused);
 	s.micEnabled = readBool("MicEnabled", defaults.micEnabled);
 	s.micDevice = readString("MicDevice", defaults.micDevice);
 	s.micGain = readInt("MicGain", defaults.micGain, 0, 400);
@@ -100,6 +101,7 @@ void SaveSettings()
 	const Settings& s = GetSettings();
 	write("SoundEnabled", s.soundEnabled ? 1 : 0);
 	write("Volume", s.volume);
+	write("HearWhilePaused", s.hearWhilePaused ? 1 : 0);
 	write("MicEnabled", s.micEnabled ? 1 : 0);
 	write("MicDevice", s.micDevice);
 	write("MicGain", s.micGain);

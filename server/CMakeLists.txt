@@ -20,7 +20,6 @@ set(VOICE_BRIDGE_CORE_SOURCES
 	src/log.cpp
 	src/udp-socket.cpp
 	src/voice-server.cpp
-	src/voice-gain.cpp
 )
 
 add_library(voice-bridge SHARED
@@ -56,7 +55,7 @@ target_compile_definitions(voice-bridge PRIVATE
 	$<$<BOOL:${UNIX}>:LINUX>
 )
 
-target_link_libraries(voice-bridge PRIVATE OMP-SDK opus)
+target_link_libraries(voice-bridge PRIVATE OMP-SDK)
 
 if(WIN32)
 	target_link_libraries(voice-bridge PRIVATE ws2_32)
@@ -116,7 +115,7 @@ if(BUILD_TESTING)
 		"${VOICE_BRIDGE_SHARED_DIR}"
 		"${CMAKE_BINARY_DIR}/generated"
 	)
-	target_link_libraries(voice-bridge-tests PRIVATE OMP-SDK opus)
+	target_link_libraries(voice-bridge-tests PRIVATE OMP-SDK)
 	target_compile_definitions(voice-bridge-tests PRIVATE $<$<BOOL:${WIN32}>:WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0601>)
 	if(WIN32)
 		target_link_libraries(voice-bridge-tests PRIVATE ws2_32)

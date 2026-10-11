@@ -89,4 +89,14 @@ const Api& Get();
 // BASS output must be initialised before channels are created.  SA-MP does
 // it at startup; when it did not (audio streams disabled) the mod does it.
 bool EnsureOutput(HWND window);
+
+// SA-MP follows the GTA radio volume with BASS's global stream volume, which
+// also scales the voices.  Redirects samp.dll's BASS calls so that volume only
+// applies to its own audio streams (PlayAudioStreamForPlayer) and the global
+// one can stay at the maximum without a tug of war (that made the audio
+// stream choppy).  Call until it returns true; samp.dll resolves BASS late.
+bool RedirectSampVolume(HMODULE samp);
+bool SampVolumeRedirected();
+// The radio volume SA-MP asked for before the redirection (0 - 10000).
+void NoteSampStreamVolume(DWORD volume);
 }

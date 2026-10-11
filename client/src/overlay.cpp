@@ -200,11 +200,11 @@ void drawHeadIcons(ImDrawList* draw, float scale)
 	for (const SpeakerInfo& speaker : Audio::Get().speakers())
 	{
 		float position[3];
-		if (!samp::PlayerPosition(speaker.player, position))
+		if (!samp::PlayerHeadPosition(speaker.player, position))
 		{
 			continue; // not streamed in
 		}
-		const game::Vec3 head { position[0], position[1], position[2] + 1.05f };
+		const game::Vec3 head { position[0], position[1], position[2] };
 		float x = 0.f;
 		float y = 0.f;
 		float depth = 0.f;
@@ -576,6 +576,10 @@ bool pageSound()
 	ImGui::SetNextItemWidth(-1.f);
 	changed |= ImGui::SliderInt("##volume", &settings.volume, 0, 200, "%d%%");
 	ImGui::TextColored(kMuted, "%s", tr("Above 100% the voices are amplified.", "Acima de 100% as vozes são amplificadas."));
+	ImGui::Spacing();
+	changed |= toggle(tr("Hear while the game is paused", "Ouvir com o jogo pausado"), &settings.hearWhilePaused);
+	ImGui::TextColored(kMuted, "%s",
+		tr("Pause menu (Esc), minimised or in the background (alt+tab).", "Menu de pausa (Esc), minimizado ou em segundo plano (alt+tab)."));
 
 	sectionTitle(tr("3D sound", "Som 3D"));
 	const char* modes[] = {
@@ -1106,7 +1110,12 @@ HRESULT WINAPI presentHook(IDirect3DDevice9* device, const RECT* source, const R
 		ImGui::NewFrame();
 		const VoiceStatus status = client.status();
 		trackSpeakers(status);
-		drawHud(status);
+		// The pause menu (Esc) and the player list (TAB) cover the game:
+		// icons above heads or the speaker list would float over them.
+		if (g_menu || (!game::IsMenuActive() && !samp::IsScoreboardActive()))
+		{
+			drawHud(status);
+		}
 		if (g_menu)
 		{
 			drawMenu(status);

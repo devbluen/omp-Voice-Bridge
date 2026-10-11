@@ -66,9 +66,7 @@ configure_file(
 	@ONLY
 )
 
-# Opus: the client encodes/decodes voice, the server re-encodes it when a
-# voice gain is set.  Position independent: it goes into the server .so.
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Opus: the client encodes/decodes voice.
 include(FetchContent)
 
 # Opus 1.4 (the last release without the downloadable neural network models).

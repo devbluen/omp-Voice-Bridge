@@ -42,6 +42,9 @@ constexpr uint32_t kEntityGameObject = 0x40;
 constexpr uint32_t kPedFlags = 0x46C; // CPed: bInVehicle is bit 8
 constexpr uint32_t kPedInVehicle = 0x100;
 constexpr uint32_t kPedVehicle = 0x58C;
+constexpr uint32_t kEntityRwObject = 0x18; // CEntity: RpClump, null while not loaded
+constexpr float kAbovePedCenter = 1.05f;     // ped position is about the pelvis
+constexpr float kAboveHeadBone = 0.35f;
 constexpr uint16_t kMaxPlayers = 1004;
 constexpr uint16_t kMaxVehicles = 2000;
 constexpr uint16_t kMaxObjects = 1000;
@@ -215,6 +218,27 @@ bool InSafeRead()
 	return g_inSafeRead;
 }
 
+namespace
+{
+// GTA CPed::GetBonePosition (thiscall).  The ped's own matrix is stale in a
+// vehicle, but its skeleton is animated with the vehicle.
+bool boneCall(uintptr_t ped, float out[3])
+{
+	using GetBonePosition = void(__thiscall*)(void*, float*, uint32_t, bool);
+	static const auto getBone = reinterpret_cast<GetBonePosition>(0x5E4280);
+	constexpr uint32_t kBoneHead = 8;
+	__try
+	{
+		getBone(reinterpret_cast<void*>(ped), out, kBoneHead, false);
+		return true;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+}
+
 bool Detect(HMODULE module)
 {
 	g_base = reinterpret_cast<uintptr_t>(module);
@@ -344,6 +368,15 @@ bool IsDialogActive()
 	return g_layout && Read(g_base + g_layout->dialog, dialog) && dialog && Read(dialog + kDialogActive, active) && active;
 }
 
+bool IsScoreboardActive()
+{
+	// CScoreboard sits right before CDialog in every 0.3.7/DL build; its
+	// first member is m_bIsEnabled.
+	uintptr_t scoreboard = 0;
+	BOOL active = FALSE;
+	return g_layout && Read(g_base + g_layout->dialog - 4, scoreboard) && scoreboard && Read(scoreboard, active) && active == TRUE;
+}
+
 bool SetCursor(bool visible)
 {
 	if (!g_layout || g_layout->game == kNone || g_layout->setCursorMode == kNone)
@@ -379,6 +412,47 @@ bool PlayerPosition(uint16_t player, float out[3])
 	return players && Read(players + g_layout->playerPoolObjects + player * sizeof(uint32_t), info) && info
 		&& Read(info + g_layout->playerInfoPlayer, remote) && remote && Read(remote + g_layout->remotePlayerPed, ped) && ped
 		&& Read(ped + kEntityGameObject, gamePed) && gamePosition(PedPlaceable(gamePed), out);
+}
+
+bool PlayerHeadPosition(uint16_t player, float out[3])
+{
+	if (player >= kMaxPlayers || !g_layout)
+	{
+		return false;
+	}
+	const uintptr_t players = pool(g_layout->poolsPlayer);
+	uintptr_t info = 0;
+	uintptr_t remote = 0;
+	uintptr_t ped = 0;
+	uintptr_t gamePed = 0;
+	if (!players || !Read(players + g_layout->playerPoolObjects + player * sizeof(uint32_t), info) || !info
+		|| !Read(info + g_layout->playerInfoPlayer, remote) || !remote || !Read(remote + g_layout->remotePlayerPed, ped) || !ped
+		|| !Read(ped + kEntityGameObject, gamePed) || !gamePed)
+	{
+		return false;
+	}
+	uint32_t flags = 0;
+	uintptr_t clump = 0;
+	if (Read(gamePed + kPedFlags, flags) && (flags & kPedInVehicle) && Read(gamePed + kEntityRwObject, clump) && clump)
+	{
+		float bone[3] = {};
+		g_inSafeRead = true; // a fault here is handled, not a crash
+		const bool ok = boneCall(gamePed, bone);
+		g_inSafeRead = false;
+		if (ok && finite3(bone))
+		{
+			out[0] = bone[0];
+			out[1] = bone[1];
+			out[2] = bone[2] + kAboveHeadBone;
+			return true;
+		}
+	}
+	if (!gamePosition(PedPlaceable(gamePed), out))
+	{
+		return false;
+	}
+	out[2] += kAbovePedCenter;
+	return true;
 }
 
 uintptr_t PedPlaceable(uintptr_t ped)

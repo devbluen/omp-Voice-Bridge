@@ -73,7 +73,8 @@ public:
 	void pushVoice(uint32_t stream, uint16_t sender, uint32_t packid, const uint8_t* data, std::size_t size);
 
 	// Main thread, once per frame
-	void update(const game::Listener& listener, bool serverPositions);
+	// silenced: voices are muted (game paused and the player chose so).
+	void update(const game::Listener& listener, bool serverPositions, bool silenced = false);
 	std::vector<SpeakerInfo> speakers();
 	// One line per voice channel, for the log (vehicle diagnostics).
 	std::vector<std::string> diagnostics(const game::Listener& listener);

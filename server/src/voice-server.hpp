@@ -14,7 +14,6 @@
 
 #include "config.hpp"
 #include "udp-socket.hpp"
-#include "voice-gain.hpp"
 #include <vb-protocol.hpp>
 #include <array>
 #include <atomic>
@@ -212,7 +211,6 @@ struct Player
 	std::bitset<kMaxPlayers> blocked;
 
 	bool talking = false;
-	float voiceGain = 1.f; // VB_SetPlayerVoiceGain, times the server gain
 	bool clientMicAvailable = false;
 	bool clientMicMuted = false;
 	bool clientSoundMuted = false;
@@ -252,10 +250,6 @@ public:
 	bool setPlayerSpeakerList(uint16_t player, bool visible);
 	bool setPlayerMicIcon(uint16_t player, bool visible);
 	// Voice volume (1.0 = unchanged): of everybody, and of one speaker.
-	void setVoiceGain(float gain);
-	float voiceGain() const { return globalGain_.load(); }
-	bool setPlayerVoiceGain(uint16_t player, float gain);
-	float playerVoiceGain(uint16_t player) const;
 	bool setPlayerHeadIcons(uint16_t player, bool visible);
 	bool setPlayerVoiceActivation(uint16_t player, bool allowed);
 	uint8_t clientVersion(uint16_t player) const;
@@ -424,8 +418,6 @@ private:
 	uint32_t nextWireEffect_ = 1;
 
 	std::array<std::atomic<uint64_t>, kMaxPlayers> udpAddress_ {};
-	VoiceGain gain_;
-	std::atomic<float> globalGain_ { 1.f };
 	// Diagnostics: voice packets sent to / accepted from each player.
 	std::array<std::atomic<uint32_t>, kMaxPlayers> deliveredTo_ {};
 	std::array<std::atomic<uint32_t>, kMaxPlayers> receivedFrom_ {};

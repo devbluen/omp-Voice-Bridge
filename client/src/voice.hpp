@@ -104,6 +104,8 @@ private:
 	bool gameFocused() const;
 
 	HWND window_ = nullptr;
+	uint64_t lastVolumeRedirect_ = 0;
+	int volumeRedirectTries_ = 0;
 	bool menuOpen_ = false;
 	bool proxyWarned_ = false;
 

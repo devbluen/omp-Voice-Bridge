@@ -50,6 +50,8 @@ void** RakClientSlot(const void* skipVtable);
 
 bool IsChatInputActive();
 bool IsDialogActive();
+// The player list (TAB).
+bool IsScoreboardActive();
 // Frees the mouse for the settings window (R1, R3, R5 and DL only).
 bool SetCursor(bool visible);
 
@@ -60,6 +62,9 @@ uintptr_t PedPlaceable(uintptr_t ped);
 // Positions of remote entities, used when the server does not send them
 // (SampVoice servers).
 bool PlayerPosition(uint16_t player, float out[3]);
+// Point just above a remote player's head, for the voice icon (follows the
+// head inside vehicles too).
+bool PlayerHeadPosition(uint16_t player, float out[3]);
 // Nick of a player from samp.dll's player pool (servers that do not send names).
 bool PlayerName(uint16_t player, std::string& out);
 bool VehiclePosition(uint16_t vehicle, float out[3]);

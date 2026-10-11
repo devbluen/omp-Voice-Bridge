@@ -12,6 +12,7 @@ struct Settings
 {
 	bool soundEnabled = true;
 	int volume = 100; // 0 - 200 %
+	bool hearWhilePaused = true; // keep hearing in the pause menu / minimised
 	bool micEnabled = true;
 	std::string micDevice; // empty = system default
 	int micGain = 100; // 0 - 400 %

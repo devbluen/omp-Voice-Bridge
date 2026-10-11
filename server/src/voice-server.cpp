@@ -188,7 +188,6 @@ bool VoiceServer::start(const Config& config, ITransport* transport, IWorld* wor
 	world_ = world;
 	events_ = events;
 	bitrate_ = config.bitrate;
-	globalGain_ = static_cast<float>(config.gainPercent) / 100.f;
 	allowSampVoice_ = config.allowSampVoice;
 	allowVoiceBridge_ = config.allowVoiceBridge;
 	LogSetDebug(config.debug);
@@ -483,7 +482,6 @@ void VoiceServer::resetPlayer(uint16_t player, bool notifyScripts)
 		ipReported_[player] = false;
 		lockedIp_[player] = 0;
 		deliveredTo_[player] = 0;
-		gain_.reset(player);
 		dropLogged_[player] = 0;
 		receivedFrom_[player] = 0;
 		vehicleWatch_[player] = VehicleWatch {};
@@ -748,27 +746,6 @@ bool VoiceServer::setPlayerMicIcon(uint16_t player, bool visible)
 	sendClientConfig(player);
 	flushOutbox();
 	return true;
-}
-
-void VoiceServer::setVoiceGain(float gain)
-{
-	globalGain_ = std::clamp(gain, 0.f, 20.f);
-}
-
-bool VoiceServer::setPlayerVoiceGain(uint16_t player, float gain)
-{
-	if (!validPlayer(player) || !players_[player].connected)
-	{
-		return false;
-	}
-	std::unique_lock<std::shared_mutex> lock(routeMutex_);
-	players_[player].voiceGain = std::clamp(gain, 0.f, 20.f);
-	return true;
-}
-
-float VoiceServer::playerVoiceGain(uint16_t player) const
-{
-	return validPlayer(player) ? players_[player].voiceGain : 0.f;
 }
 
 bool VoiceServer::setPlayerHeadIcons(uint16_t player, bool visible)
@@ -2588,16 +2565,6 @@ void VoiceServer::relayVoice(uint16_t sender, uint32_t packid, const uint8_t* op
 		logDroppedVoice(sender, VoiceIgnored::NotSpeaker,
 			"the player is not a speaker of any stream (the script did not call VB_AddSpeaker / SvAttachSpeakerToStream)");
 		return;
-	}
-
-	// Server voice gain (voice_gain, VB_SetVoiceGain, VB_SetPlayerVoiceGain).
-	uint8_t amplified[vb::kMaxVoicePacketSize];
-	std::size_t amplifiedSize = 0;
-	if (gain_.apply(sender, packid, globalGain_.load() * speaker.voiceGain, bitrate_, opus, size, amplified, vb::kMaxVoicePacketSize - kHeaderSize,
-			amplifiedSize))
-	{
-		opus = amplified;
-		size = static_cast<uint16_t>(amplifiedSize);
 	}
 
 	uint8_t packet[vb::kMaxVoicePacketSize];

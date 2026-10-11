@@ -794,7 +794,7 @@ bool Audio::resolveSource(Stream& stream, bool serverPositions, game::Vec3& out)
 	return stream.sourceKnown;
 }
 
-void Audio::update(const game::Listener& listener, bool serverPositions)
+void Audio::update(const game::Listener& listener, bool serverPositions, bool silenced)
 {
 	if (!ready_)
 	{
@@ -802,16 +802,19 @@ void Audio::update(const game::Listener& listener, bool serverPositions)
 	}
 	const auto& api = bass::Get();
 	const Settings& settings = GetSettings();
-	const float master = settings.soundEnabled ? static_cast<float>(settings.volume) / 100.f : 0.f;
+	const float master = settings.soundEnabled && !silenced ? static_cast<float>(settings.volume) / 100.f : 0.f;
 	const uint64_t t = now();
 	const game::Vec3 right = normalize(cross(listener.front, listener.up));
 	const game::Vec3 front = normalize(listener.front);
 
 	// SA-MP ties BASS's global stream volume to the GTA radio volume; at 0 the
-	// voice would be silent too.  Voice chat keeps it at the maximum.
+	// voice would be silent too.  Voice chat keeps it at the maximum; once
+	// samp.dll's BASS calls are redirected (bass::RedirectSampVolume) the
+	// radio volume goes to its audio streams only and this runs once.
 	const DWORD streamVolume = api.GetConfig(bass::kConfigGlobalStreamVolume);
 	if (streamVolume != static_cast<DWORD>(-1) && streamVolume < 10000)
 	{
+		bass::NoteSampStreamVolume(streamVolume);
 		if (streamVolume != loggedStreamVolume_)
 		{
 			loggedStreamVolume_ = streamVolume;
@@ -845,10 +848,13 @@ void Audio::update(const game::Listener& listener, bool serverPositions)
 			}
 			else
 			{
-				// Inverse distance (about -6 dB per doubling) from a 1.5 m
-				// reference, plus a smooth fade over the last 40% of the range
-				// so voices disappear instead of being cut.
-				const float reference = std::min(1.5f, maxDistance * 0.25f);
+				// Inverse distance (about -6 dB per doubling) from a reference
+				// of 10% of the range like SampVoice (BASS min distance), at
+				// least 1.5 m, plus a smooth fade over the last 40% of the
+				// range so voices disappear instead of being cut.  Scripts
+				// rely on it: a police radio is a point stream far away with
+				// a huge distance, heard at full volume everywhere.
+				const float reference = std::max(std::min(1.5f, maxDistance * 0.25f), maxDistance * 0.1f);
 				const float rolloff = 0.8f * static_cast<float>(settings.distanceStrength) / 100.f;
 				spatialGain = distance <= reference ? 1.f : reference / (reference + rolloff * (distance - reference));
 				const float fade = std::clamp((ratio - 0.6f) / 0.4f, 0.f, 1.f);

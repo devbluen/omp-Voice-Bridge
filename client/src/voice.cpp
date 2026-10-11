@@ -4,6 +4,7 @@
 
 #include "voice.hpp"
 #include "audio.hpp"
+#include "bass.hpp"
 #include "game.hpp"
 #include "log.hpp"
 #include "samp.hpp"
@@ -1049,12 +1050,23 @@ void VoiceClient::frame()
 	}
 
 	const uint64_t t = now();
+	if (!bass::SampVolumeRedirected() && volumeRedirectTries_ < 60 && t - lastVolumeRedirect_ >= 1000 && samp::Base())
+	{
+		lastVolumeRedirect_ = t;
+		if (!bass::RedirectSampVolume(reinterpret_cast<HMODULE>(samp::Base())) && ++volumeRedirectTries_ == 60)
+		{
+			Log("SA-MP audio stream volume could not be separated from voice chat");
+		}
+	}
 	skipSequenceGap(false);
 	updateTransport(t);
 	updateKeys(t);
 	sendStatus(false);
 	const game::Listener listener = game::GetListener(GetSettings().orientationFromCharacter);
-	Audio::Get().update(listener, serverPositions_);
+	// Paused: the GTA pause menu, or the window minimised / in the background
+	// (SA-MP pauses the game there too).
+	const bool paused = game::IsMenuActive() || (window_ && (IsIconic(window_) || !gameFocused()));
+	Audio::Get().update(listener, serverPositions_, paused && !GetSettings().hearWhilePaused);
 	logVehicleDiagnostics(listener, t);
 
 	notifications_.erase(std::remove_if(notifications_.begin(), notifications_.end(), [t](const Notification& n) { return n.expires <= t; }),
