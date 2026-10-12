@@ -74,6 +74,7 @@ void LoadSettings()
 	s.uiScale = readInt("UiScale", defaults.uiScale, 50, 300);
 	s.menuKey = readInt("MenuKey", defaults.menuKey, 0, 255);
 	s.language = readInt("Language", defaults.language, 0, 2);
+	s.menuTheme = readInt("MenuTheme", defaults.menuTheme, 0, 3);
 	s.spatialMode = readInt("SpatialMode", defaults.spatialMode, 0, 2);
 	s.roomAmount = readInt("RoomAmount", defaults.roomAmount, 0, 100);
 	s.distanceStrength = readInt("DistanceStrength", defaults.distanceStrength, 50, 200);
@@ -115,6 +116,7 @@ void SaveSettings()
 	WritePrivateProfileStringA(kSection, "MenuCommand", nullptr, path().c_str());
 	write("MenuKey", s.menuKey);
 	write("Language", s.language);
+	write("MenuTheme", s.menuTheme);
 	write("SpatialMode", s.spatialMode);
 	write("RoomAmount", s.roomAmount);
 	write("DistanceStrength", s.distanceStrength);

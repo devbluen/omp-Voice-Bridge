@@ -25,6 +25,7 @@ struct Settings
 	int uiScale = 100; // %
 	int menuKey = 0x7A; // VK_F11: opens the voice menu
 	int language = 0; // 0 follows Windows, 1 English, 2 Portuguese
+	int menuTheme = 0; // 0 classic, 1 lounge (Discord like), 2 neon, 3 terminal
 
 	// 3D audio
 	int spatialMode = 0; // 0 realistic, 1 simple stereo, 2 off

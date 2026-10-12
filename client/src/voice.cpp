@@ -861,10 +861,8 @@ bool VoiceClient::gameFocused() const
 	{
 		return false;
 	}
-	if (window_)
-	{
-		return foreground == window_;
-	}
+	// Any window of the game process: windowed mode fixes wrap the Direct3D
+	// window in a frame of their own, which is the foreground one then.
 	DWORD process = 0;
 	GetWindowThreadProcessId(foreground, &process);
 	return process == GetCurrentProcessId();
@@ -1056,7 +1054,12 @@ void VoiceClient::frame()
 	const game::Listener listener = game::GetListener(GetSettings().orientationFromCharacter);
 	// Paused: the GTA pause menu, or the window minimised / in the background
 	// (SA-MP pauses the game there too).
-	const bool paused = game::IsMenuActive() || (window_ && (IsIconic(window_) || !gameFocused()));
+	const bool paused = game::IsMenuActive() || !gameFocused() || (window_ && IsIconic(GetAncestor(window_, GA_ROOT)));
+	if (paused != wasPaused_)
+	{
+		wasPaused_ = paused;
+		Log(paused ? "game paused (pause menu, minimised or in the background)" : "game resumed");
+	}
 	Audio::Get().update(listener, serverPositions_, paused && !GetSettings().hearWhilePaused);
 	logVehicleDiagnostics(listener, t);
 

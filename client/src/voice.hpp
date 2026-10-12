@@ -104,6 +104,7 @@ private:
 	bool gameFocused() const;
 
 	HWND window_ = nullptr;
+	bool wasPaused_ = false;
 	bool menuOpen_ = false;
 	bool proxyWarned_ = false;
 

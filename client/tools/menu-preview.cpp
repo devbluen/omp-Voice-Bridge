@@ -11,7 +11,7 @@
 
 namespace vbc::overlay
 {
-void PreviewFrame(IDirect3DDevice9* device, int page, bool portuguese);
+void PreviewFrame(IDirect3DDevice9* device, int page, bool portuguese, int theme);
 }
 
 namespace
@@ -82,15 +82,19 @@ int main(int argc, char** argv)
 	}
 
 	const char* names[] = { "status", "sound", "microphone", "players", "interface", "about" };
-	for (int page = 0; page < 6; ++page)
+	const char* themes[] = { "classic", "lounge", "neon", "terminal" };
+	for (int theme = 0; theme < 4; ++theme)
 	{
-		for (int frame = 0; frame < 4; ++frame)
+		for (int page = 0; page < 6; ++page)
 		{
-			device->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_XRGB(70, 92, 110), 1.f, 0);
-			vbc::overlay::PreviewFrame(device, page, portuguese);
+			for (int frame = 0; frame < 4; ++frame)
+			{
+				device->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_XRGB(70, 92, 110), 1.f, 0);
+				vbc::overlay::PreviewFrame(device, page, portuguese, theme);
+			}
+			const std::string path = folder + "\\menu-" + themes[theme] + "-" + names[page] + ".bmp";
+			std::printf("%s %s\n", path.c_str(), saveBitmap(device, path, width, height) ? "ok" : "FAILED");
 		}
-		const std::string path = folder + "\\menu-" + names[page] + ".bmp";
-		std::printf("%s %s\n", path.c_str(), saveBitmap(device, path, width, height) ? "ok" : "FAILED");
 	}
 	device->Release();
 	d3d->Release();
