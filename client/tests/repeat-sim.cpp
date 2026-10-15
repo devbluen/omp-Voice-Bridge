@@ -6,9 +6,12 @@
  *  loss).  Everything that reaches the playback buffer is recorded and the
  *  tone sequence is checked: a frame heard twice is a repeat.
  *
- *  usage: voice-bridge-repeat-sim.exe [two-streams 0|1] ["C:\path\to\GTA San Andreas"]
- *  two-streams: the speaker is also in a second stream the listener hears
- *  (the server then sends every packet twice, once per stream).
+ *  usage: voice-bridge-repeat-sim.exe [streams 0|1|2] ["C:\path\to\GTA San Andreas"]
+ *  1: the speaker is also in a second stream the listener hears (the server
+ *  then sends every packet twice, once per stream).
+ *  2: the first copy always comes from a local stream out of the listener's
+ *  range, the second from a global radio: only the radio is audible, so only
+ *  its channel counts (the radio used to be silenced by the local copy).
  */
 
 #include "audio.hpp"
@@ -113,7 +116,8 @@ struct Arrival
 
 int main(int argc, char** argv)
 {
-	const bool twoStreams = argc > 1 && argv[1][0] == '1';
+	const int mode = argc > 1 ? std::clamp(argv[1][0] - '0', 0, 2) : 0;
+	const bool twoStreams = mode != 0;
 	const std::string gta = argc > 2 ? argv[2] :"C:\\Program Files (x86)\\Gtas\\SanAndreas";
 	LogOpen("repeat-sim.log");
 	HMODULE bass = LoadLibraryA((gta + "\\bass.dll").c_str());
@@ -131,12 +135,20 @@ int main(int argc, char** argv)
 		std::printf("audio init failed\n");
 		return 1;
 	}
-	audio.createStream(1, StreamKind::Global, 0xFFFFFFFF, "Global", 0.f, {}, 0xFFFF);
+	if (mode == 2)
+	{
+		audio.createStream(1, StreamKind::Point, 0xFFFFFFFF, "Local", 15.f, { 500.f, 0.f, 0.f }, 0xFFFF);
+	}
+	else
+	{
+		audio.createStream(1, StreamKind::Global, 0xFFFFFFFF, "Global", 0.f, {}, 0xFFFF);
+	}
 	audio.createStream(2, StreamKind::Global, 0xFFFFFFFF, "Radio", 0.f, {}, 0xFFFF);
 	game::Listener listener;
 	listener.valid = true;
 	listener.front = { 0.f, 1.f, 0.f };
 	listener.up = { 0.f, 0.f, 1.f };
+	audio.update(listener, false);
 
 	// Network: frame i is sent at i*100 ms, with 0-80 ms jitter.  Frames
 	// 12-18 are held by a 700 ms freeze and arrive together; 25 and 26 swap;
@@ -163,7 +175,7 @@ int main(int argc, char** argv)
 		if (twoStreams)
 		{
 			// The copy of the second stream: up to 150 ms earlier or later.
-			const int shift = std::rand() % 301 - 150;
+			const int shift = mode == 2 ? 1 + std::rand() % 5 : std::rand() % 301 - 150;
 			arrivals.push_back({ static_cast<uint64_t>(std::max<int64_t>(0, static_cast<int64_t>(at) + shift)), i, 2 });
 		}
 	}
@@ -171,6 +183,7 @@ int main(int argc, char** argv)
 
 	const uint64_t start = GetTickCount64();
 	std::vector<DWORD> hooked;
+	std::vector<uint32_t> hookedStream;
 	std::size_t next = 0;
 	while (GetTickCount64() - start < kFrames * 100 + 2500)
 	{
@@ -187,6 +200,7 @@ int main(int argc, char** argv)
 					&& setDsp(handle, &capture, reinterpret_cast<void*>(static_cast<intptr_t>(hooked.size())), -2000000000))
 				{
 					hooked.push_back(handle);
+					hookedStream.push_back(arrivals[next - 1].stream);
 				}
 			}
 		}
@@ -200,7 +214,8 @@ int main(int argc, char** argv)
 		std::lock_guard<std::mutex> lock(g_mutex);
 		for (std::size_t c = 0; c < hooked.size(); ++c)
 		{
-			std::printf("channel %zu heard:", c + 1);
+			const bool audible = mode != 2 || hookedStream[c] == 2;
+			std::printf("channel %zu (stream %u%s) heard:", c + 1, hookedStream[c], audible ? "" : ", out of range");
 			int last = -1;
 			const auto& heard = g_heard[c];
 			for (std::size_t i = 0; i + 960 <= heard.size(); i += 960)
@@ -209,7 +224,7 @@ int main(int argc, char** argv)
 				if (frame >= 0 && frame != last)
 				{
 					std::printf(" %d", frame);
-					++times[frame];
+					times[frame] += audible ? 1 : 0;
 					last = frame;
 				}
 			}
@@ -224,7 +239,7 @@ int main(int argc, char** argv)
 		missing += times[f] == 0 ? 1 : 0;
 	}
 	std::printf("%s: repeated frames: %d, missing frames: %d of %d (sent network loses 1 and holds 7 in a freeze), stale packets dropped: %d\n",
-		twoStreams ? "two streams" : "one stream", repeats, missing, kFrames, audio.stalePackets());
+		mode == 2 ? "local out of range + radio" : twoStreams ? "two streams" : "one stream", repeats, missing, kFrames, audio.stalePackets());
 	audio.shutdown();
-	return repeats ? 1 : 0;
+	return repeats || (mode == 2 && missing > 12) ? 1 : 0;
 }

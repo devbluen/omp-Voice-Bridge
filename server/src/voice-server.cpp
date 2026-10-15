@@ -1972,9 +1972,11 @@ void VoiceServer::tickPositions()
 			{
 				continue;
 			}
+			// No deleteStream first: open.mp delivers these unordered, and a
+			// create that overtook the delete left the stream deleted on the
+			// client (silent until the next change).  The SampVoice client
+			// replaces a stream created again with the same id.
 			legacy.legacyFlat.erase(streamId);
-			const vb::DeleteStreamPacket remove { streamId };
-			queueControl(id, vb::ctl::deleteStream, &remove, sizeof(remove));
 			sendStreamState(*stream, id);
 			LogDebug("player %u (SampVoice) hears stream %u (%s) %s", id, streamId, describeSource(*stream).c_str(),
 				want ? "without 3D now: a vehicle is involved (the client mutes 3D voice in vehicles)" : "in 3D again");

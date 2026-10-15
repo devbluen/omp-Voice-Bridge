@@ -450,6 +450,7 @@ void testDynamicStreams()
 
 	// Vehicle diagnostics: entering a vehicle is logged with what the player
 	// hears, and the console report describes the same.
+	const std::size_t deletesBefore = transport.controls(2, vb::ctl::deleteStream).size();
 	world.players[2].vehicle = 412;
 	pump(1100);
 	const auto report = server.statusReport(2);
@@ -482,6 +483,9 @@ void testDynamicStreams()
 	world.players[0].vehicle = -1;
 	pump(80);
 	CHECK(transport.controls(2, vb::ctl::createLStreamAtPlayer).size() == atPlayerBefore + 2);
+	// Recreated without a deleteStream: open.mp may deliver it after the new
+	// create, which deleted the stream on the SampVoice client.
+	CHECK(transport.controls(2, vb::ctl::deleteStream).size() == deletesBefore);
 
 	CHECK(server.setStreamMaxListeners(stream, 1));
 	world.players[1].position.x = 2.f;

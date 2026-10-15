@@ -22,6 +22,9 @@ constexpr uint64_t kRestartGapMs = 1000;
 // A speaker stays on the stream that delivered their audio until it has
 // been quiet this long; copies from other streams are dropped.
 constexpr uint64_t kRouteHoldMs = 400;
+// Another stream takes over only when it is this much louder (no flapping
+// between two streams heard at about the same volume).
+constexpr float kRouteSwitchMargin = 0.1f;
 // How far ahead of the clock a packet may claim to be before it is treated
 // as a leftover of the previous utterance.
 constexpr uint64_t kStaleToleranceMs = 600;
@@ -602,12 +605,33 @@ void Audio::pushVoice(uint32_t streamId, uint16_t sender, uint32_t packid, const
 	// and split between both when packets arrive in a different order.
 	// Checked before the duplicate filter: a rejected copy must not mark the
 	// packet as already played, or the copy of the right stream is dropped.
-	SpeakerRoute& route = routes_[sender];
-	if (route.stream != streamId && route.time && t - route.time < kRouteHoldMs && streams_.count(route.stream))
+	// The louder copy wins: the first stream to deliver may be one the
+	// listener cannot hear (e.g. the speaker's local stream out of range
+	// while they talk on a global radio), which silenced the radio.
+	const auto audibility = [t](const Stream& stream)
 	{
-		return;
+		const auto volume = stream.parameters.find(vb::param::volume);
+		return stream.gain * (volume == stream.parameters.end() ? 1.f : std::max(0.f, volume->second.value(t)));
+	};
+	SpeakerRoute& route = routes_[sender];
+	bool switching = false;
+	if (route.stream != streamId && route.time && t - route.time < kRouteHoldMs)
+	{
+		const auto held = streams_.find(route.stream);
+		if (held != streams_.end())
+		{
+			const float heldLevel = audibility(held->second);
+			const float level = audibility(it->second);
+			if (level <= heldLevel + kRouteSwitchMargin && !(heldLevel <= 0.f && level > 0.f))
+			{
+				return;
+			}
+			switching = true;
+		}
 	}
-	if (duplicate(sender, packid, data, size, t))
+	// A switch replays this frame on the new stream: the copy already played
+	// went to the stream that could not be heard.
+	if (!switching && duplicate(sender, packid, data, size, t))
 	{
 		return;
 	}
