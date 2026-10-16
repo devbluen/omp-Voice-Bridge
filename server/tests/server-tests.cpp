@@ -271,6 +271,22 @@ void testVoiceRouting()
 	CHECK(server.clientVersion(0) == vb::kLegacyVersion);
 	CHECK(events.handshakes == 3);
 
+	// The game reconnected before the Voice Bridge client could add its hello
+	// to the join (server restart without closing the game): the client
+	// announces itself afterwards with a vbClientHello.
+	server.onClientJoin(7, vanilla.data(), vanilla.size());
+	CHECK(!server.hasPlugin(7));
+	const vb::VbHello lateHello { vb::kVbMagic, vb::kVbProtocol, vb::helloflag::hasMicro, 1, 0 };
+	std::vector<uint8_t> lateControl(sizeof(vb::ControlHeader) + sizeof(lateHello));
+	const vb::ControlHeader lateHeader { vb::ctl::vbClientHello, sizeof(lateHello) };
+	std::memcpy(lateControl.data(), &lateHeader, sizeof(lateHeader));
+	std::memcpy(lateControl.data() + sizeof(lateHeader), &lateHello, sizeof(lateHello));
+	server.onControlPacket(7, lateControl.data(), lateControl.size());
+	CHECK(server.hasPlugin(7) && server.isExtended(7) && server.hasMicro(7));
+	CHECK(transport.controls(7, vb::ctl::vbServerInfo).size() == 1);
+	server.onPlayerDisconnect(7);
+	events.handshakes = 3;
+
 	const auto info0 = transport.controls(0, vb::ctl::serverInfo);
 	CHECK(info0.size() == 1);
 	vb::ServerInfoPacket legacyInfo {};

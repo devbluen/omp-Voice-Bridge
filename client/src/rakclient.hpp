@@ -149,6 +149,8 @@ bool Install(void** slot, Events* events);
 bool Installed();
 const void* ProxyVtable();
 bool Connected();
+// IPv4 of the server the RakClient is connected to (0 if not connected).
+uint32_t ServerIp();
 bool Send(const uint8_t* data, std::size_t size, bool reliable);
 int Ping();
 }

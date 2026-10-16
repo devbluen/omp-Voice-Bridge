@@ -270,8 +270,12 @@ bool Install(void** slot, Events* events)
 	auto* proxy = new Proxy(current);
 	g_original = current;
 	g_proxy = proxy;
+	// Installed again after SA-MP reconnected on its own (the server
+	// restarted or dropped the game): the connection is already up and its
+	// "accepted" packet will not come again.
+	g_connected = current->IsConnected();
 	*slot = proxy;
-	Log("RakClient proxy installed");
+	Log(g_connected ? "RakClient proxy installed (already connected)" : "RakClient proxy installed");
 	return true;
 }
 
@@ -295,6 +299,11 @@ const void* ProxyVtable()
 bool Connected()
 {
 	return g_proxy && g_connected;
+}
+
+uint32_t ServerIp()
+{
+	return g_original && g_connected ? g_original->GetServerID().binaryAddress : 0;
 }
 
 bool Send(const uint8_t* data, std::size_t size, bool reliable)

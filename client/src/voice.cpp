@@ -1026,8 +1026,21 @@ void VoiceClient::frame()
 	{
 		if (void** slot = samp::RakClientSlot(rak::ProxyVtable()))
 		{
-			rak::Install(slot, this);
-			Audio::Get().setFrameSink([this](const uint8_t* data, std::size_t size, uint32_t packid) { onEncodedFrame(data, size, packid); });
+			if (rak::Install(slot, this))
+			{
+				Audio::Get().setFrameSink([this](const uint8_t* data, std::size_t size, uint32_t packid) { onEncodedFrame(data, size, packid); });
+				if (rak::Connected() && server_ == ServerKind::None)
+				{
+					// SA-MP reconnected while the proxy was handed back (see
+					// rak::Install): the join went out without the voice
+					// hello, so announce the client now.  Voice Bridge
+					// servers accept it; SampVoice servers ignore it.
+					serverIp_ = rak::ServerIp();
+					Log("connected without the voice hello (SA-MP reconnected); announcing the voice client");
+					const auto hello = joinPayload();
+					sendControl(vb::ctl::vbClientHello, hello.data() + sizeof(vb::ConnectPacket), sizeof(vb::VbHello));
+				}
+			}
 		}
 		else if (!proxyWarned_ && samp::NetGame())
 		{
