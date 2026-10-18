@@ -2290,7 +2290,8 @@ void VoiceServer::processWorkerEvents()
 	}
 	for (uint32_t ip : blocked)
 	{
-		LogWarning("blocked %s for 5 minutes: too many voice packets without a valid session (port scan or key guessing)",
+		LogWarning("blocked %s for 5 minutes: too many voice packets without a valid session (a client still using its key from"
+			" before a server restart, a port scan or key guessing); a player who joins from it is let through",
 			FormatIp(ip).c_str());
 	}
 
@@ -2683,20 +2684,27 @@ void VoiceServer::workerLoop()
 void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uint16_t port)
 {
 	const uint64_t t = now();
-	if (rejectSource(ip, t))
-	{
-		return;
-	}
+	// A blocked address still gets through with a valid session of a player
+	// connected from that same address: after a server restart the clients
+	// that stayed open keep sending with the old key and got their own IP
+	// blocked, and players behind one carrier NAT (mobile) share an IP.
+	const bool blocked = rejectSource(ip, t);
 	if (size < static_cast<int>(kHeaderSize) || size > static_cast<int>(vb::kMaxVoicePacketSize))
 	{
-		noteInvalid(ip, t);
+		if (!blocked)
+		{
+			noteInvalid(ip, t);
+		}
 		return;
 	}
 	vb::VoiceHeader header;
 	std::memcpy(&header, data, kHeaderSize);
 	if (!vb::checkVoiceHeader(header) || kHeaderSize + header.length != static_cast<std::size_t>(size))
 	{
-		noteInvalid(ip, t);
+		if (!blocked)
+		{
+			noteInvalid(ip, t);
+		}
 		return;
 	}
 
@@ -2708,15 +2716,30 @@ void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uin
 		const auto it = keys_.find(header.svrkey);
 		if (it == keys_.end())
 		{
-			noteInvalid(ip, t);
+			if (!blocked)
+			{
+				noteInvalid(ip, t);
+			}
 			return;
 		}
 		const uint16_t player = it->second;
 		const Player& p = players_[player];
 		if ((!p.plugin && !p.probe) || p.key != header.svrkey)
 		{
-			noteInvalid(ip, t);
+			if (!blocked)
+			{
+				noteInvalid(ip, t);
+			}
 			return;
+		}
+		if (blocked)
+		{
+			if (!p.gameIp || ip != p.gameIp)
+			{
+				return;
+			}
+			sources_.erase(ip);
+			LogInfo("unblocked %s: player %u connected from it with a valid voice session", FormatIp(ip).c_str(), player);
 		}
 		// After the first valid packet the session is bound to that IP: a
 		// guessed key from elsewhere can neither inject voice nor redirect

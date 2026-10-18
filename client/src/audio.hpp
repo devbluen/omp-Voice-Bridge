@@ -182,6 +182,8 @@ private:
 		DWORD queued = 0; // bytes pushed since the channel (re)started
 		uint64_t lastPacket = 0;
 		float level = 0.f;
+		// Gain the speaker's voice is played with (see amplify); < 0 = not set.
+		float gain = -1.f;
 		float appliedFrequency = -1.f;
 		std::unique_ptr<Spatial> spatial;
 		Placement placement;

@@ -93,23 +93,58 @@ uint64_t packetMs(const uint8_t* data, std::size_t size)
 	return samples > 0 ? static_cast<uint64_t>(samples) / (vb::kFrequency / 1000) : 20;
 }
 
-// Gain with a soft knee instead of hard clipping.
-void amplify(int16_t* samples, int count, float gain)
+// Amplifies a decoded frame by up to `wanted` without distorting it: the
+// whole frame is scaled so its peak stays under the ceiling (a waveshaper
+// that bent every sample above 80% made loud voices, typically phones with
+// automatic gain, sound twisted).  The gain drops at once for a louder frame
+// (over a few ms, no click) and comes back up slowly; `current` keeps it
+// per speaker.
+void amplify(int16_t* samples, int count, float wanted, float& current)
 {
-	if (gain > 0.999f && gain < 1.001f)
+	constexpr float kCeiling = 0.89f; // -1 dBFS
+	constexpr float kReleaseDbPerSecond = 6.f;
+	constexpr int kAttackSamples = 240; // 5 ms
+	if (count <= 0)
 	{
 		return;
 	}
+	int peakSample = 0;
 	for (int i = 0; i < count; ++i)
 	{
+		peakSample = std::max(peakSample, std::abs(static_cast<int>(samples[i])));
+	}
+	const float peak = static_cast<float>(peakSample) / 32768.f;
+	const float target = peak * wanted > kCeiling ? kCeiling / peak : wanted;
+	if (current < 0.f)
+	{
+		current = target;
+	}
+	const float start = current;
+	float end = target;
+	if (target > start)
+	{
+		const float frameSeconds = static_cast<float>(count) / static_cast<float>(vb::kFrequency);
+		end = std::min(target, start * std::pow(10.f, kReleaseDbPerSecond * frameSeconds / 20.f));
+	}
+	if (start > 0.999f && start < 1.001f && end > 0.999f && end < 1.001f)
+	{
+		current = end;
+		return;
+	}
+	const int ramp = end < start ? std::min(count, kAttackSamples) : count;
+	for (int i = 0; i < count; ++i)
+	{
+		const float gain = i < ramp ? start + (end - start) * static_cast<float>(i + 1) / static_cast<float>(ramp) : end;
 		float value = static_cast<float>(samples[i]) / 32768.f * gain;
+		// Only the attack ramp can overshoot the ceiling: rounded off softly.
 		const float magnitude = std::fabs(value);
-		if (magnitude > 0.8f)
+		if (magnitude > kCeiling)
 		{
-			value = std::copysign(0.8f + 0.2f * std::tanh((magnitude - 0.8f) / 0.2f), value);
+			value = std::copysign(kCeiling + (1.f - kCeiling) * std::tanh((magnitude - kCeiling) / (1.f - kCeiling)), value);
 		}
 		samples[i] = static_cast<int16_t>(std::clamp(value * 32767.f, -32768.f, 32767.f));
 	}
+	current = end;
 }
 
 float defaultParameter(uint32_t parameter)
@@ -661,7 +696,7 @@ void Audio::pushVoice(uint32_t streamId, uint16_t sender, uint32_t packid, const
 				return;
 			}
 		}
-		amplify(pcm, samples, preGain);
+		amplify(pcm, samples, preGain, channel->gain);
 		for (int i = 0; i < samples; ++i)
 		{
 			stereo[i * 2] = stereo[i * 2 + 1] = pcm[i];

@@ -113,6 +113,9 @@ private:
 	std::string host_;
 	uint16_t gamePort_ = 0;
 	uint32_t serverIp_ = 0;
+	// When to announce the client with a vbClientHello if the join hello got
+	// no answer (0 = not pending).
+	uint64_t helloDueAt_ = 0;
 	uint32_t key_ = 0;
 	uint16_t voicePort_ = 0;
 	uint32_t bitrate_ = 24000;

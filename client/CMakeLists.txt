@@ -108,6 +108,23 @@ target_compile_definitions(voice-bridge-repeat-sim PRIVATE WIN32_LEAN_AND_MEAN N
 target_compile_options(voice-bridge-repeat-sim PRIVATE /utf-8 /W3)
 target_link_libraries(voice-bridge-repeat-sim PRIVATE opus)
 set_target_properties(voice-bridge-repeat-sim PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client")
+
+# A mobile (SampVoice) speaker through a phone network: every frame heard
+# once, no long stalls while talking.
+add_executable(voice-bridge-mobile-sim
+	tests/mobile-sim.cpp
+	src/audio.cpp
+	src/bass.cpp
+	src/game.cpp
+	src/log.cpp
+	src/samp.cpp
+	src/settings.cpp
+)
+target_include_directories(voice-bridge-mobile-sim PRIVATE src "${VOICE_BRIDGE_SHARED_DIR}" "${CMAKE_BINARY_DIR}/generated")
+target_compile_definitions(voice-bridge-mobile-sim PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0601)
+target_compile_options(voice-bridge-mobile-sim PRIVATE /utf-8 /W3)
+target_link_libraries(voice-bridge-mobile-sim PRIVATE opus)
+set_target_properties(voice-bridge-mobile-sim PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/client")
 target_compile_definitions(voice-bridge-audio-smoke PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS _WIN32_WINNT=0x0601)
 target_compile_options(voice-bridge-audio-smoke PRIVATE /utf-8 /W3)
 target_link_libraries(voice-bridge-audio-smoke PRIVATE opus)

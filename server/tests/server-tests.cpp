@@ -659,6 +659,21 @@ void testSecurityAndClientTypes()
 	owner.send(vb::voice::voicePacket, opus, 2);
 	CHECK(listener.receiveVoice(header, payload));
 	CHECK(header.sender == 0 && header.packid == 2);
+
+	// A client still sending with its key from before a server restart gets
+	// the IP blocked; players who joined from that IP (the same machine, or a
+	// mobile carrier NAT) keep talking.
+	Client stale;
+	CHECK(stale.open(port));
+	for (uint32_t i = 0; i < 40; ++i)
+	{
+		stale.key = 0x2000 + i;
+		stale.send(vb::voice::keepAlive);
+	}
+	pump(100);
+	owner.send(vb::voice::voicePacket, opus, 3);
+	CHECK(listener.receiveVoice(header, payload));
+	CHECK(header.sender == 0 && header.packid == 3);
 	server.stop();
 }
 

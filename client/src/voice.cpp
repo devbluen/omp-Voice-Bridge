@@ -28,6 +28,9 @@ namespace
 {
 constexpr uint64_t kUdpTimeoutMs = 12000;
 constexpr uint64_t kTunnelAfterMs = 4000;
+// The server answers the join within a second; without an answer by then the
+// hello is sent on its own (see VoiceClient::frame).
+constexpr uint64_t kLateHelloMs = 4000;
 constexpr uint64_t kProbeIntervalMs = 300;
 constexpr uint64_t kTunnelProbeIntervalMs = 3000;
 constexpr std::size_t kMaxTunnelQueue = 64;
@@ -117,6 +120,7 @@ void VoiceClient::onConnect(const char* host, unsigned short port)
 void VoiceClient::onConnectionAccepted(uint32_t serverIp, uint16_t)
 {
 	serverIp_ = serverIp;
+	helloDueAt_ = now() + kLateHelloMs;
 }
 
 void VoiceClient::onDisconnect()
@@ -811,6 +815,7 @@ void VoiceClient::resetSession()
 	}
 	server_ = ServerKind::None;
 	serverIp_ = 0;
+	helloDueAt_ = 0;
 	key_ = 0;
 	voicePort_ = 0;
 	legacyReady_ = false;
@@ -1033,12 +1038,10 @@ void VoiceClient::frame()
 				{
 					// SA-MP reconnected while the proxy was handed back (see
 					// rak::Install): the join went out without the voice
-					// hello, so announce the client now.  Voice Bridge
-					// servers accept it; SampVoice servers ignore it.
+					// hello, so announce the client now.
 					serverIp_ = rak::ServerIp();
-					Log("connected without the voice hello (SA-MP reconnected); announcing the voice client");
-					const auto hello = joinPayload();
-					sendControl(vb::ctl::vbClientHello, hello.data() + sizeof(vb::ConnectPacket), sizeof(vb::VbHello));
+					helloDueAt_ = now();
+					Log("connected without the voice hello (SA-MP reconnected)");
 				}
 			}
 		}
@@ -1061,6 +1064,20 @@ void VoiceClient::frame()
 
 	const uint64_t t = now();
 	skipSequenceGap(false);
+	if (helloDueAt_ && t >= helloDueAt_)
+	{
+		// The join carried the hello but nothing answered: another mod
+		// wrapping the RakClient (e.g. SAMPFUNCS) may rebuild the join RPC
+		// without it.  Voice Bridge servers accept the hello on its own;
+		// SampVoice servers ignore it.
+		helloDueAt_ = 0;
+		if (rak::Connected() && server_ == ServerKind::None)
+		{
+			Log("no answer from the voice server; announcing the voice client");
+			const auto hello = joinPayload();
+			sendControl(vb::ctl::vbClientHello, hello.data() + sizeof(vb::ConnectPacket), sizeof(vb::VbHello));
+		}
+	}
 	updateTransport(t);
 	updateKeys(t);
 	sendStatus(false);
