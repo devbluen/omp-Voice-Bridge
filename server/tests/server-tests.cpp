@@ -296,7 +296,8 @@ void testVoiceRouting()
 	// Every connection gets one answer from VB_OnPlayerClientDetected: the
 	// vanilla player 2 is reported without a client (version 0) after the
 	// timeout, so a script can kick there; the clients were reported once.
-	pump(1300);
+	// The timeout is checked once a second, so the answer comes 1-2 s after
+	// joining here.
 	const auto reports = [&events](uint16_t player)
 	{
 		std::vector<uint8_t> versions;
@@ -309,6 +310,10 @@ void testVoiceRouting()
 		}
 		return versions;
 	};
+	for (int waited = 0; waited < 3000 && reports(2).empty(); waited += 100)
+	{
+		pump(100);
+	}
 	CHECK(reports(2) == std::vector<uint8_t> { 0 });
 	CHECK(!server.hasPlugin(2));
 	CHECK(reports(0).size() == 1 && reports(0)[0] != 0);

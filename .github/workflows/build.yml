@@ -1,8 +1,7 @@
 name: Build Voice Bridge
 
+# Runs on pull requests, by hand (Actions > Run workflow) and from the release.
 on:
-  push:
-    branches: [main, master]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
