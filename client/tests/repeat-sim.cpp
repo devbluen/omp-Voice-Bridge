@@ -129,6 +129,8 @@ int main(int argc, char** argv)
 	const auto setDsp = reinterpret_cast<SetDsp>(GetProcAddress(bass, "BASS_ChannelSetDSP"));
 	GetSettings().volume = 0;
 	GetSettings().spatialMode = 2; // flat, so the tone is not altered
+	// Tests the network path: pure tones are what noise suppression removes.
+	GetSettings().incomingNoiseSuppression = false;
 	Audio& audio = Audio::Get();
 	if (!audio.init(GetConsoleWindow()))
 	{

@@ -21,7 +21,7 @@ public OnGameModeInit()
 	return 1;
 }
 
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
+public OnPlayerConnect(playerid)
 {
 	VB_AddKey(playerid, VB_KEY_X);
 	return 1;

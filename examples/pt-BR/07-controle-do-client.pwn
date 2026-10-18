@@ -60,13 +60,6 @@ VerificarClientVoz(playerid)
 	VB_SetPlayerSpeakerList(playerid, false);
 }
 
-// Normalmente é chamado antes do OnPlayerConnect; os dois casos são tratados.
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
-{
-	VerificarClientVoz(playerid);
-	return 1;
-}
-
 public OnPlayerConnect(playerid)
 {
 	VerificarClientVoz(playerid);

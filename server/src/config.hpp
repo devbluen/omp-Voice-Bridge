@@ -36,6 +36,11 @@ struct Config
 	uint32_t positionRateMs = 100;
 	uint32_t keepAliveMs = 5000;
 	uint32_t maxPacketsPerSecond = 80;
+	// VB_OnPlayerClientDetected reports "no voice client" (version 0) when
+	// none showed up this long after joining.  It covers clients whose hello
+	// comes after the join (SAMPFUNCS strips it from the join; R2/R4 after a
+	// reconnect).
+	uint32_t clientTimeoutMs = 15000;
 	bool debug = false;
 	// Voice log file.  Empty picks logs/voice-bridge.log (when a logs folder
 	// exists, as on open.mp) or voice-bridge.log; "off" disables it.  The

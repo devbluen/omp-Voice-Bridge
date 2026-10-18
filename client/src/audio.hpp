@@ -14,6 +14,7 @@
 
 #include "bass.hpp"
 #include "game.hpp"
+#include "noise.hpp"
 #include <array>
 #include <atomic>
 #include <bitset>
@@ -184,6 +185,8 @@ private:
 		float level = 0.f;
 		// Gain the speaker's voice is played with (see amplify); < 0 = not set.
 		float gain = -1.f;
+		// Background noise removed from what this speaker sends.
+		NoiseSuppressor noise;
 		float appliedFrequency = -1.f;
 		std::unique_ptr<Spatial> spatial;
 		Placement placement;
@@ -235,6 +238,7 @@ private:
 		uint64_t time = 0;
 	};
 	std::array<RecentPacket, 256> recent_ {};
+	std::vector<int16_t> incoming_; // decoded voice after noise suppression (under mutex_)
 	// Stream each speaker is currently heard through (one at a time).
 	struct SpeakerRoute
 	{
@@ -267,6 +271,8 @@ private:
 	uint32_t bitrate_ = 24000;
 	uint32_t frameMs_ = 100;
 	std::vector<int16_t> pending_;
+	NoiseSuppressor noise_;
+	std::vector<int16_t> gained_;
 	std::atomic<uint64_t> capturedSamples_ { 0 };
 	uint32_t packid_ = 0;
 	std::atomic<bool> transmitting_ { false };

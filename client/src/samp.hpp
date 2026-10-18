@@ -44,6 +44,8 @@ bool Read(uintptr_t address, T& out)
 }
 
 void* NetGame();
+// CNetGame's destructor in samp.dll, or nullptr when unknown for this build.
+void* NetGameDestructor();
 // Address of the RakClient pointer inside CNetGame, or nullptr when it cannot
 // be located safely.  `skip` is a vtable to ignore (our proxy).
 void** RakClientSlot(const void* skipVtable);

@@ -34,12 +34,6 @@ ConfigurarVoz(playerid)
 	VB_AddKey(playerid, VB_KEY_Z);
 }
 
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
-{
-	ConfigurarVoz(playerid);
-	return 1;
-}
-
 public OnPlayerConnect(playerid)
 {
 	ConfigurarVoz(playerid); // também cobre o GMX, quando os jogadores continuam conectados

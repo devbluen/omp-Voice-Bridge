@@ -144,8 +144,10 @@ public:
 	virtual void onPacket(const uint8_t* data, std::size_t size) = 0;
 };
 
-// Replaces *slot with the proxy.  Safe to call every frame.
-bool Install(void** slot, Events* events);
+// Replaces *slot with the proxy.  Safe to call every frame.  With CNetGame's
+// destructor (nullptr when unknown) the proxy stays until the network game is
+// destroyed, like SampVoice; without it, it is handed back on disconnect.
+bool Install(void** slot, Events* events, void* netGameDestructor);
 bool Installed();
 const void* ProxyVtable();
 bool Connected();

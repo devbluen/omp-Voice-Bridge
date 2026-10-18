@@ -452,6 +452,7 @@ void Audio::freeChannel(Channel& channel)
 		channel.decoder = nullptr;
 	}
 	channel.effects.clear();
+	channel.noise.reset();
 }
 
 Audio::Spatial::Spatial()
@@ -682,9 +683,11 @@ void Audio::pushVoice(uint32_t streamId, uint16_t sender, uint32_t packid, const
 	// through the channel volume.
 	const float master = static_cast<float>(GetSettings().volume) / 100.f;
 	const float preGain = std::min(kBaseGain * std::max(1.f, master) * std::max(1.f, playerVolumeLocked(sender)), kMaxPreGain);
+	const bool cleanIncoming = GetSettings().incomingNoiseSuppression;
 	int16_t pcm[kMaxFrameSamples];
-	int16_t stereo[kMaxFrameSamples * 2];
-	const auto put = [&](int samples)
+	// A decoded frame plus what the noise suppressor still held (< 10 ms).
+	int16_t stereo[(kMaxFrameSamples + NoiseSuppressor::kFrameSamples) * 2];
+	const auto put = [&](int decoded)
 	{
 		if (channel->playing)
 		{
@@ -696,10 +699,18 @@ void Audio::pushVoice(uint32_t streamId, uint16_t sender, uint32_t packid, const
 				return;
 			}
 		}
-		amplify(pcm, samples, preGain, channel->gain);
+		// Noise first, then the gain: the limiter must see the cleaned peak.
+		incoming_.clear();
+		channel->noise.process(pcm, static_cast<std::size_t>(decoded), cleanIncoming, incoming_);
+		const int samples = static_cast<int>(std::min<std::size_t>(incoming_.size(), kMaxFrameSamples + NoiseSuppressor::kFrameSamples));
+		if (samples <= 0)
+		{
+			return;
+		}
+		amplify(incoming_.data(), samples, preGain, channel->gain);
 		for (int i = 0; i < samples; ++i)
 		{
-			stereo[i * 2] = stereo[i * 2 + 1] = pcm[i];
+			stereo[i * 2] = stereo[i * 2 + 1] = incoming_[i];
 		}
 		if (!channel->dsp)
 		{
@@ -1211,6 +1222,7 @@ void Audio::startRecording()
 	{
 		std::lock_guard<std::mutex> lock(captureMutex_);
 		pending_.clear();
+		noise_.reset();
 	}
 	// 20 ms recording period; frames are assembled in onCapture.
 	recordHandle_ = api.RecordStart(vb::kFrequency, 1, MAKELONG(bass::kRecordPause, 20), &Audio::recordProc, this);
@@ -1361,11 +1373,15 @@ void Audio::onCapture(const int16_t* samples, std::size_t count)
 	const std::size_t frameSamples = frameMs_ * (vb::kFrequency / 1000);
 	const float gain = static_cast<float>(settings.micGain) / 100.f;
 	capturedSamples_ += count;
+	gained_.resize(count);
 	for (std::size_t i = 0; i < count; ++i)
 	{
 		const float value = static_cast<float>(samples[i]) * gain;
-		pending_.push_back(static_cast<int16_t>(std::clamp(value, -32768.f, 32767.f)));
+		gained_[i] = static_cast<int16_t>(std::clamp(value, -32768.f, 32767.f));
 	}
+	// Before the level meter, the noise gate and voice activation, so they
+	// react to the voice and not to the fan.
+	noise_.process(gained_.data(), count, settings.noiseSuppression, pending_);
 
 	while (pending_.size() >= frameSamples)
 	{

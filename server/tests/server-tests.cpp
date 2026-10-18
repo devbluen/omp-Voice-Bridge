@@ -122,9 +122,14 @@ public:
 	std::vector<std::pair<uint16_t, bool>> talking;
 	int handshakes = 0;
 	int keys = 0;
+	std::vector<std::pair<uint16_t, uint8_t>> detected; // player, version (0 = no client)
 
 	void onActivationKey(uint16_t, uint8_t, bool) override { ++keys; }
-	void onHandshake(uint16_t, uint8_t, bool, bool) override { ++handshakes; }
+	void onHandshake(uint16_t player, uint8_t version, bool, bool) override
+	{
+		++handshakes;
+		detected.emplace_back(player, version);
+	}
 	void onTransport(uint16_t player, uint8_t transport) override { transports.emplace_back(player, transport); }
 	void onTalking(uint16_t player, bool value) override { talking.emplace_back(player, value); }
 	void onClientStatus(uint16_t, bool, bool, bool) override { }
@@ -241,6 +246,7 @@ void testVoiceRouting()
 	config.port = 0;
 	config.gamePort = 65535; // makes the server pick a free port
 	config.bind = "127.0.0.1";
+	config.clientTimeoutMs = 1000;
 	VoiceServer& server = VoiceServer::Get();
 	CHECK(server.start(config, &transport, &world, &events));
 	const uint16_t port = server.port();
@@ -286,6 +292,28 @@ void testVoiceRouting()
 	CHECK(transport.controls(7, vb::ctl::vbServerInfo).size() == 1);
 	server.onPlayerDisconnect(7);
 	events.handshakes = 3;
+
+	// Every connection gets one answer from VB_OnPlayerClientDetected: the
+	// vanilla player 2 is reported without a client (version 0) after the
+	// timeout, so a script can kick there; the clients were reported once.
+	pump(1300);
+	const auto reports = [&events](uint16_t player)
+	{
+		std::vector<uint8_t> versions;
+		for (const auto& entry : events.detected)
+		{
+			if (entry.first == player)
+			{
+				versions.push_back(entry.second);
+			}
+		}
+		return versions;
+	};
+	CHECK(reports(2) == std::vector<uint8_t> { 0 });
+	CHECK(!server.hasPlugin(2));
+	CHECK(reports(0).size() == 1 && reports(0)[0] != 0);
+	CHECK(reports(1).size() == 1 && reports(1)[0] != 0);
+	CHECK(reports(7).size() == 1 && reports(7)[0] != 0); // late hello: found, never "none"
 
 	const auto info0 = transport.controls(0, vb::ctl::serverInfo);
 	CHECK(info0.size() == 1);

@@ -581,11 +581,8 @@ void VoiceServer::onClientJoin(uint16_t player, const uint8_t* data, std::size_t
 	else
 	{
 		LogInfo("player %u uses %s, which is not allowed on this server", player, hasHello ? "Voice Bridge" : "SampVoice");
-		if (events_)
-		{
-			events_->onHandshake(player, hasLegacy ? legacy.version : vb::kLegacyVersion, hasHello,
-				hasHello ? (hello.flags & vb::helloflag::hasMicro) != 0 : legacy.micro != 0);
-		}
+		reportDetection(player, hasLegacy ? legacy.version : vb::kLegacyVersion, hasHello,
+			hasHello ? (hello.flags & vb::helloflag::hasMicro) != 0 : legacy.micro != 0);
 	}
 	flushOutbox();
 }
@@ -600,9 +597,18 @@ void VoiceServer::completeHandshake(uint16_t player)
 		sendClientConfig(player);
 		sendNames(player);
 	}
+	reportDetection(player, p.version, p.extended, p.micro);
+}
+
+// Every connection gets one definite answer: a client (version > 0, also when
+// it is not allowed: VB_HasPlugin tells) or none (version 0) after the
+// timeout.  A client announced after that is still reported (a second call).
+void VoiceServer::reportDetection(uint16_t player, uint8_t version, bool extended, bool micro)
+{
+	players_[player].detectionReported = true;
 	if (events_)
 	{
-		events_->onHandshake(player, p.version, p.extended, p.micro);
+		events_->onHandshake(player, version, extended, micro);
 	}
 }
 
@@ -2228,6 +2234,11 @@ void VoiceServer::tickDiagnostics()
 	for (uint16_t id = 0; id < kMaxPlayers; ++id)
 	{
 		Player& p = players_[id];
+		if (p.connected && !p.detectionReported && p.connectedAt && t - p.connectedAt >= config_.clientTimeoutMs)
+		{
+			LogDebug("player %u: no voice client %u ms after joining", id, config_.clientTimeoutMs);
+			reportDetection(id, 0, false, false);
+		}
 		if (p.plugin && !p.identified && !p.udpWarned && p.handshakeAt && t - p.handshakeAt >= kUdpWarnAfterMs)
 		{
 			p.udpWarned = true;
@@ -2333,9 +2344,9 @@ void VoiceServer::processWorkerEvents()
 		}
 		const uint64_t address = udpAddress_[id];
 		LogDebug("player %u voice UDP identified from %s:%u", id, FormatIp(AddressIp(address)).c_str(), AddressPort(address));
-		if (probed && events_)
+		if (probed)
 		{
-			events_->onHandshake(id, p.version, false, p.micro);
+			reportDetection(id, p.version, false, p.micro);
 		}
 		if (!p.extended)
 		{

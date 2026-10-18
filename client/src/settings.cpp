@@ -62,10 +62,12 @@ void LoadSettings()
 	s.soundEnabled = readBool("SoundEnabled", defaults.soundEnabled);
 	s.volume = readInt("Volume", defaults.volume, 0, 200);
 	s.hearWhilePaused = readBool("HearWhilePaused", defaults.hearWhilePaused);
+	s.incomingNoiseSuppression = readBool("IncomingNoiseSuppression", defaults.incomingNoiseSuppression);
 	s.micEnabled = readBool("MicEnabled", defaults.micEnabled);
 	s.micDevice = readString("MicDevice", defaults.micDevice);
 	s.micGain = readInt("MicGain", defaults.micGain, 0, 400);
 	s.noiseGate = readInt("NoiseGate", defaults.noiseGate, -90, -10);
+	s.noiseSuppression = readBool("NoiseSuppression", defaults.noiseSuppression);
 	s.voiceActivation = readBool("VoiceActivation", defaults.voiceActivation);
 	s.voiceActivationLevel = readInt("VoiceActivationLevel", defaults.voiceActivationLevel, -80, -5);
 	s.showSpeakerList = readBool("ShowSpeakerList", defaults.showSpeakerList);
@@ -103,10 +105,12 @@ void SaveSettings()
 	write("SoundEnabled", s.soundEnabled ? 1 : 0);
 	write("Volume", s.volume);
 	write("HearWhilePaused", s.hearWhilePaused ? 1 : 0);
+	write("IncomingNoiseSuppression", s.incomingNoiseSuppression ? 1 : 0);
 	write("MicEnabled", s.micEnabled ? 1 : 0);
 	write("MicDevice", s.micDevice);
 	write("MicGain", s.micGain);
 	write("NoiseGate", s.noiseGate);
+	write("NoiseSuppression", s.noiseSuppression ? 1 : 0);
 	write("VoiceActivation", s.voiceActivation ? 1 : 0);
 	write("VoiceActivationLevel", s.voiceActivationLevel);
 	write("ShowSpeakerList", s.showSpeakerList ? 1 : 0);

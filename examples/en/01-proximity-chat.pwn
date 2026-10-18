@@ -34,12 +34,6 @@ SetupVoice(playerid)
 	VB_AddKey(playerid, VB_KEY_Z);
 }
 
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
-{
-	SetupVoice(playerid);
-	return 1;
-}
-
 public OnPlayerConnect(playerid)
 {
 	SetupVoice(playerid); // also covers a GMX, when players stay connected

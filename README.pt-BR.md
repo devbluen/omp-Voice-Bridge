@@ -104,6 +104,7 @@ voice_bitrate 24000
 |---|---|---|---|
 | `strict_ip` | `voice_strict_ip` | false | Aceita voz só do IP do jogo. Desligado, outro IP (proxy/anti-DDoS) é aceito e registrado no log. |
 | `max_packets_per_second` | `voice_max_packets_per_second` | 80 | Limite anti-flood por jogador. |
+| `client_timeout_ms` | `voice_client_timeout_ms` | 15000 | Depois desse tempo sem client de voz, `VB_OnPlayerClientDetected` é chamado com `VB_CLIENT_NONE`. |
 | `debug` | `voice_debug` | false | Registra os detalhes (quem ouve quem, veículos, voz descartada) no console e no log da voz. |
 | `log_file` | `voice_log_file` | - | Log só da voz, com data e hora (os detalhes só com `debug` ligado). Padrão: `logs/voice-bridge.log` (open.mp) ou `voice-bridge.log`. `off` desliga. |
 
@@ -127,10 +128,13 @@ Um **stream** é uma sala de voz: **speakers** falam nela e **listeners** ouvem.
 
 new gLocal[MAX_PLAYERS] = { VB_INVALID_STREAM, ... };
 
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
+public OnPlayerConnect(playerid)
 {
-    gLocal[playerid] = VB_CreateDynamicStreamAtPlayer(35.0, VB_INFINITE, playerid, 0xFF66FF66, "Local");
-    VB_AddKey(playerid, VB_KEY_B);
+    if (VB_HasPlugin(playerid)) // já é conhecido aqui, como no SampVoice
+    {
+        gLocal[playerid] = VB_CreateDynamicStreamAtPlayer(35.0, VB_INFINITE, playerid, 0xFF66FF66, "Local");
+        VB_AddKey(playerid, VB_KEY_B);
+    }
     return 1;
 }
 
@@ -203,7 +207,23 @@ if (VB_GetClientVersionNumbers(playerid, major, minor, patch) == VB_CLIENT_VOICE
 }
 ```
 
-A versão já é conhecida em `VB_OnPlayerClientDetected` (normalmente antes do `OnPlayerConnect`), inclusive para clients que não estão permitidos. A versão do SA-MP do jogador (R1, R3...) é dada pela native padrão `GetPlayerVersion`.
+Como no SampVoice, o client de voz já é conhecido no `OnPlayerConnect` (ele vem junto com o join), inclusive para clients que não estão permitidos. A versão do SA-MP do jogador (R1, R3...) é dada pela native padrão `GetPlayerVersion`.
+
+**Expulsar quem está sem o client de voz**
+
+```pawn
+public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
+{
+    if (!VB_HasPlugin(playerid)) // sem client (version == VB_CLIENT_NONE) ou client não permitido
+    {
+        SendClientMessage(playerid, 0xFF5555FF, "Instale o client de voz para jogar aqui.");
+        SetTimerEx("ExpulsarSemVoz", 500, false, "i", playerid); // a mensagem chega antes do kick
+    }
+    return 1;
+}
+```
+
+O callback responde uma vez por conexão: com o client assim que ele é reconhecido (normalmente antes do `OnPlayerConnect`) ou com `VB_CLIENT_NONE` se nada chegar em `voice_client_timeout_ms` (15 s). Não expulse pelo `VB_HasPlugin` no `OnPlayerConnect`: com SAMPFUNCS, por exemplo, o client só se anuncia alguns segundos depois.
 
 **Quais clients podem usar a voz**
 
@@ -322,7 +342,7 @@ Outros: `VB_IsValidEffect(effect)`. Efeitos e streams são liberados sozinhos qu
 | Callback | Quando |
 |---|---|
 | `OnPlayerActivationKeyPress(playerid, keyid)` / `OnPlayerActivationKeyRelease` | Tecla de falar pressionada/solta. |
-| `VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)` | Client de voz detectado. |
+| `VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)` | Uma resposta por conexão: o client (normalmente antes do `OnPlayerConnect`) ou `version == VB_CLIENT_NONE` sem client após `voice_client_timeout_ms`. É o lugar certo para expulsar quem não tem o client. |
 | `VB_OnPlayerTransportChange(playerid, transport)` | Voz conectou, caiu ou foi para o túnel. |
 | `VB_OnPlayerStartTalking(playerid)` / `VB_OnPlayerStopTalking(playerid)` | Começou/parou de falar. |
 | `VB_OnPlayerClientStatus(playerid, bool:micavailable, bool:micmuted, bool:soundmuted)` | Mudou as opções de voz no menu. |
@@ -335,8 +355,8 @@ Outros: `VB_IsValidEffect(effect)`. Efeitos e streams são liberados sozinhos qu
 | Página | Conteúdo |
 |---|---|
 | Status | Conectado ou não, ping, versão do SA-MP, microfone e teclas de falar. |
-| Som | Volume, som 3D (realista, estéreo simples ou desligado), eco do ambiente, queda com a distância, direção pelo personagem ou pela câmera, inverter canais e bipe da tecla de falar. |
-| Microfone | Dispositivo, ganho, filtro de ruído, medidor, teste e ativação por voz (se o servidor permitir). |
+| Som | Volume, anti-ruído nas vozes recebidas (ligado por padrão), som 3D (realista, estéreo simples ou desligado), eco do ambiente, queda com a distância, direção pelo personagem ou pela câmera, inverter canais e bipe da tecla de falar. |
+| Microfone | Dispositivo, ganho, filtro de ruído, anti-ruído (ligado por padrão), medidor, teste e ativação por voz (se o servidor permitir). |
 | Jogadores | Volume e silenciar por jogador. |
 | Interface | Idioma (automático, English ou Português), microfone na cabeça de quem fala, tamanho, posição do ícone do microfone (ou arraste o ícone com o menu aberto) e tecla do menu. |
 | Sobre | Versão, link do projeto e créditos. |
@@ -438,6 +458,6 @@ dist/
 - **MMV (Ramon)**: testes e ideias.
 - **Claude (Anthropic)**: auxílio no desenvolvimento (servidor, client, protocolo, testes e documentação).
 - **SampVoice**: protocolo e API originais de MOR (CyberMor), seguidos para manter a compatibilidade; porte para open.mp por AmyrAhmady (iAmir).
-- Bibliotecas: [Opus](https://opus-codec.org), [Dear ImGui](https://github.com/ocornut/imgui), BASS (já vem com o SA-MP) e o SDK do open.mp.
+- Bibliotecas: [Opus](https://opus-codec.org), [RNNoise](https://github.com/xiph/rnnoise) (anti-ruído do microfone, BSD), [Dear ImGui](https://github.com/ocornut/imgui), BASS (já vem com o SA-MP) e o SDK do open.mp.
 
 Licença: MIT.

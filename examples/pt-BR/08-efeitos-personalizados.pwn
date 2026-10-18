@@ -98,9 +98,9 @@ DefinirVoz(playerid, voz)
 	gVozJogador[playerid] = voz;
 }
 
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
+public OnPlayerConnect(playerid)
 {
-	if (gStreamLocal[playerid] == VB_INVALID_STREAM)
+	if (VB_HasPlugin(playerid) && gStreamLocal[playerid] == VB_INVALID_STREAM)
 	{
 		gStreamLocal[playerid] = VB_CreateDynamicStreamAtPlayer(35.0, VB_INFINITE, playerid, 0xFF66FF66, "Local");
 		gVozJogador[playerid] = VOZ_NORMAL;

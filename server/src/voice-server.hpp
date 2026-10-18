@@ -196,6 +196,9 @@ struct Player
 	uint64_t connectedAt = 0;
 	uint64_t handshakeAt = 0;
 	bool probeSent = false;
+	// VB_OnPlayerClientDetected was called for this connection (client found,
+	// not allowed, or none after the timeout).
+	bool detectionReported = false;
 	uint16_t sequence = 0;
 
 	bool muted = false;
@@ -353,6 +356,7 @@ private:
 	void resetPlayer(uint16_t player, bool notifyScripts);
 	uint32_t generateKey();
 	void completeHandshake(uint16_t player);
+	void reportDetection(uint16_t player, uint8_t version, bool extended, bool micro);
 	void sendClientConfig(uint16_t player);
 	void sendServerInfo(uint16_t player);
 	void sendNames(uint16_t player);

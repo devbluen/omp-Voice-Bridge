@@ -821,6 +821,7 @@ bool pageSound()
 	ImGui::TextColored(g_theme->muted, "%s", tr("Above 100% the voices are amplified.", "Acima de 100% as vozes são amplificadas."));
 	ImGui::Spacing();
 	changed |= toggle(tr("Hear while the game is paused", "Ouvir com o jogo pausado"), &settings.hearWhilePaused);
+	changed |= toggle(tr("Noise suppression on the voices I hear", "Anti-ruído nas vozes que eu escuto"), &settings.incomingNoiseSuppression);
 	ImGui::TextColored(g_theme->muted, "%s",
 		tr("Pause menu (Esc), minimised or in the background (alt+tab).", "Menu de pausa (Esc), minimizado ou em segundo plano (alt+tab)."));
 
@@ -888,6 +889,8 @@ bool pageMicrophone(const VoiceStatus& status)
 	ImGui::SetNextItemWidth(-1.f);
 	changed |= ImGui::SliderInt("##gate", &settings.noiseGate, -90, -20, settings.noiseGate <= -90 ? tr("off", "desligado") : "%d dB");
 	ImGui::Spacing();
+	changed |= toggle(tr("Noise suppression (removes fans, keyboard and background noise)", "Anti-ruído (remove ventilador, teclado e barulho de fundo)"),
+		&settings.noiseSuppression);
 	bool test = audio.micTest();
 	if (toggle(tr("Hear my own voice (test)", "Ouvir minha própria voz (teste)"), &test))
 	{

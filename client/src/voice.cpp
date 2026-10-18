@@ -1031,7 +1031,7 @@ void VoiceClient::frame()
 	{
 		if (void** slot = samp::RakClientSlot(rak::ProxyVtable()))
 		{
-			if (rak::Install(slot, this))
+			if (rak::Install(slot, this, samp::NetGameDestructor()))
 			{
 				Audio::Get().setFrameSink([this](const uint8_t* data, std::size_t size, uint32_t packid) { onEncodedFrame(data, size, packid); });
 				if (rak::Connected() && server_ == ServerKind::None)

@@ -98,9 +98,9 @@ SetPlayerVoice(playerid, voice)
 	gPlayerVoice[playerid] = voice;
 }
 
-public VB_OnPlayerClientDetected(playerid, version, bool:extended, bool:hasmicro)
+public OnPlayerConnect(playerid)
 {
-	if (gLocalStream[playerid] == VB_INVALID_STREAM)
+	if (VB_HasPlugin(playerid) && gLocalStream[playerid] == VB_INVALID_STREAM)
 	{
 		gLocalStream[playerid] = VB_CreateDynamicStreamAtPlayer(35.0, VB_INFINITE, playerid, 0xFF66FF66, "Local");
 		gPlayerVoice[playerid] = VOICE_NORMAL;

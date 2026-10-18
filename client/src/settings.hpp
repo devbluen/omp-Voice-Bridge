@@ -13,10 +13,12 @@ struct Settings
 	bool soundEnabled = true;
 	int volume = 100; // 0 - 200 %
 	bool hearWhilePaused = true; // keep hearing in the pause menu / minimised
+	bool incomingNoiseSuppression = true; // removes background noise from the voices heard (RNNoise)
 	bool micEnabled = true;
 	std::string micDevice; // empty = system default
 	int micGain = 100; // 0 - 400 %
 	int noiseGate = -55; // dBFS, -90 disables
+	bool noiseSuppression = true; // removes background noise from the microphone (RNNoise)
 	bool voiceActivation = false; // only used when the server allows it
 	int voiceActivationLevel = -38; // dBFS
 	bool showSpeakerList = true;

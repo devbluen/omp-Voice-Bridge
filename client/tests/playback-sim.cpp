@@ -98,6 +98,7 @@ int main(int argc, char** argv)
 	g_level = reinterpret_cast<GetLevel>(GetProcAddress(bass, "BASS_ChannelGetLevel"));
 	g_active = reinterpret_cast<IsActive>(GetProcAddress(bass, "BASS_ChannelIsActive"));
 	GetSettings().volume = 0; // silent; the level is measured before the volume
+	GetSettings().incomingNoiseSuppression = false; // pure tones are what it removes
 	Audio& audio = Audio::Get();
 	if (!audio.init(GetConsoleWindow()))
 	{

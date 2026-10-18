@@ -22,6 +22,84 @@ void** g_slot = nullptr;
 uint64_t g_retiredAt = 0;
 constexpr uint64_t kReinstallAfterMs = 10000;
 
+// One-shot hook on CNetGame::~CNetGame, as SampVoice does: the proxy stays
+// in place across disconnects and reconnects (so every join, also SA-MP's
+// own reconnect after a server restart, carries the voice hello) and SA-MP
+// gets its own RakClient back only when the network game is destroyed.
+uint8_t* g_destructor = nullptr;
+uint8_t g_destructorBytes[5] {};
+bool g_destructorHooked = false;
+
+void writeCode(uint8_t* at, const uint8_t* bytes, std::size_t size)
+{
+	DWORD protection = 0;
+	VirtualProtect(at, size, PAGE_EXECUTE_READWRITE, &protection);
+	std::memcpy(at, bytes, size);
+	VirtualProtect(at, size, protection, &protection);
+	FlushInstructionCache(GetCurrentProcess(), at, size);
+}
+
+// SA-MP destroys the RakClient as its own concrete class: the pointer is
+// adjusted to the start of that class, which on this proxy lands on
+// unrelated memory (crash in CNetGame::~CNetGame).  Its own object goes back
+// first; the proxy is simply left alive.
+void handBack(const char* reason)
+{
+	if (g_slot && g_proxy && *g_slot == g_proxy)
+	{
+		*g_slot = g_original;
+		g_proxy = nullptr;
+		Log("RakClient handed back to SA-MP (%s)", reason);
+	}
+}
+
+void __stdcall onNetGameDestroyed()
+{
+	writeCode(g_destructor, g_destructorBytes, sizeof(g_destructorBytes));
+	g_destructorHooked = false;
+	g_connected = false;
+	handBack("network game destroyed");
+	g_slot = nullptr;
+}
+
+__declspec(naked) void destructorStub()
+{
+	__asm {
+		pushad
+		pushfd
+		call onNetGameDestroyed
+		popfd
+		popad
+		jmp dword ptr [g_destructor]
+	}
+}
+
+void hookDestructor(void* address)
+{
+	if (g_destructorHooked || !address)
+	{
+		return;
+	}
+	auto* code = static_cast<uint8_t*>(address);
+	MEMORY_BASIC_INFORMATION info {};
+	const DWORD executable = PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY;
+	if (!VirtualQuery(code, &info, sizeof(info)) || info.State != MEM_COMMIT || !(info.Protect & executable) || code[0] == 0x00
+		|| code[0] == 0xCC)
+	{
+		Log("CNetGame destructor not usable (%02X); the voice client is handed back on every disconnect", code ? code[0] : 0);
+		return;
+	}
+	std::memcpy(g_destructorBytes, code, sizeof(g_destructorBytes));
+	uint8_t jump[5] = { 0xE9 };
+	const auto relative = static_cast<int32_t>(reinterpret_cast<intptr_t>(&destructorStub) - reinterpret_cast<intptr_t>(code + 5));
+	std::memcpy(jump + 1, &relative, sizeof(relative));
+	g_destructor = code;
+	writeCode(code, jump, sizeof(jump));
+	g_destructorHooked = true;
+	Log("CNetGame destructor hooked (%02X %02X %02X): the voice client stays installed across reconnects", g_destructorBytes[0],
+		g_destructorBytes[1], g_destructorBytes[2]);
+}
+
 BitStream makeStream(uint8_t* data, std::size_t size)
 {
 	BitStream stream {};
@@ -72,17 +150,15 @@ public:
 		g_connected = false;
 		o_->Disconnect(blockDuration, orderingChannel);
 
-		// SA-MP disconnects right before destroying the RakClient (/q, game
-		// exit), and it destroys it as its own concrete class: the pointer
-		// is adjusted to the start of that class, which on this proxy lands
-		// on unrelated memory (crash in CNetGame::~CNetGame).  Hand its own
-		// object back first; the proxy is simply left alive.
-		if (g_slot && *g_slot == this)
+		// With the destructor hooked the proxy stays: a reconnect goes
+		// through it.  Without it (samp.dll builds whose destructor is not
+		// known), SA-MP disconnects right before destroying the RakClient
+		// (/q, game exit), so it gets its own back now and the proxy returns
+		// a few seconds later if the game keeps running.
+		if (!g_destructorHooked && g_slot && *g_slot == this)
 		{
-			*g_slot = o_;
-			g_proxy = nullptr;
+			handBack("disconnect");
 			g_retiredAt = GetTickCount64();
-			Log("RakClient handed back to SA-MP");
 		}
 	}
 
@@ -247,7 +323,7 @@ private:
 };
 }
 
-bool Install(void** slot, Events* events)
+bool Install(void** slot, Events* events, void* netGameDestructor)
 {
 	if (!slot || !*slot)
 	{
@@ -276,6 +352,7 @@ bool Install(void** slot, Events* events)
 	g_connected = current->IsConnected();
 	*slot = proxy;
 	Log(g_connected ? "RakClient proxy installed (already connected)" : "RakClient proxy installed");
+	hookDestructor(netGameDestructor);
 	return true;
 }
 
