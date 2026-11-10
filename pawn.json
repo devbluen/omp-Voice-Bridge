@@ -1,0 +1,7 @@
+{
+	"supports": ["samp", "openmp"],
+	"plugins": {
+		"windows": "voice-bridge-server-windows-x86-*.zip",
+		"linux": "voice-bridge-server-linux-x86-*.tar.gz"
+	}
+}
