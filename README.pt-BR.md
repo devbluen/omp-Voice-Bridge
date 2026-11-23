@@ -103,6 +103,7 @@ voice_bitrate 24000
 | config.json | server.cfg | Padrão | Descrição |
 |---|---|---|---|
 | `strict_ip` | `voice_strict_ip` | false | Aceita voz só do IP do jogo. Desligado, outro IP (proxy/anti-DDoS) é aceito e registrado no log. |
+| `trusted_proxies` | `voice_trusted_proxies` | - | Endereços IPv4 ou faixas CIDR separados por vírgula (ex.: `203.0.113.7, 10.0.0.0/8`) de relays que encaminham vários jogadores a partir de um IP. Pacotes inválidos vindos deles bloqueiam só o IP e a porta de origem, nunca o IP inteiro; as chaves e limites por jogador continuam valendo. |
 | `max_packets_per_second` | `voice_max_packets_per_second` | 80 | Limite anti-flood por jogador. |
 | `client_timeout_ms` | `voice_client_timeout_ms` | 15000 | Depois desse tempo sem client de voz, `VB_OnPlayerClientDetected` é chamado com `VB_CLIENT_NONE`. |
 | `debug` | `voice_debug` | false | Registra os detalhes (quem ouve quem, veículos, voz descartada) no console e no log da voz. |
@@ -367,7 +368,7 @@ As opções ficam no `voicebridge.ini`, na pasta do GTA. O `voicebridge.log` reg
 
 - Cada jogador recebe uma chave aleatória; pacotes sem chave válida ou com CRC errado são descartados.
 - Depois do primeiro pacote válido, a sessão fica presa àquele IP (o IP da conexão do jogo sempre tem prioridade): uma chave descoberta não serve em outra máquina.
-- Um IP que manda 30 pacotes inválidos em 10 s (varredura de porta ou tentativa de adivinhar chaves) é bloqueado por 5 minutos, com aviso no log.
+- Um IP que manda 30 pacotes inválidos em 10 s (varredura de porta ou tentativa de adivinhar chaves) é bloqueado por 5 minutos, com aviso no log. Para um proxy confiável (`trusted_proxies`) o bloqueio vale só para o IP e a porta de origem.
 - Cada jogador tem um limite de pacotes por segundo.
 - O client nunca mostra IP, porta ou tipo de conexão; esses dados ficam só no log do servidor.
 
