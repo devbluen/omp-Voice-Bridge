@@ -192,6 +192,7 @@ bool VoiceServer::start(const Config& config, ITransport* transport, IWorld* wor
 	allowVoiceBridge_ = config.allowVoiceBridge;
 	LogSetDebug(config.debug);
 	openLogFile(config.logFile);
+	parseTrustedProxies(config.trustedProxies);
 
 	const std::string bindIp = config.bind.empty() ? config.gameBind : config.bind;
 	const uint16_t wanted = config.port ? config.port : static_cast<uint16_t>(config.gamePort < 65535 ? config.gamePort + 1 : 0);
@@ -2294,16 +2295,22 @@ void VoiceServer::processWorkerEvents()
 		}
 	}
 
-	std::vector<uint32_t> blocked;
+	std::vector<uint64_t> blocked;
 	{
 		std::lock_guard<std::mutex> lock(workerEventsMutex_);
 		blocked.swap(blockedSources_);
 	}
-	for (uint32_t ip : blocked)
+	for (uint64_t source : blocked)
 	{
+		const bool proxySource = (source >> 32) != 0;
+		std::string name = FormatIp(proxySource ? AddressIp(source) : static_cast<uint32_t>(source));
+		if (proxySource)
+		{
+			name += ":" + std::to_string(AddressPort(source)) + " (trusted proxy)";
+		}
 		LogWarning("blocked %s for 5 minutes: too many voice packets without a valid session (a client still using its key from"
 			" before a server restart, a port scan or key guessing); a player who joins from it is let through",
-			FormatIp(ip).c_str());
+			name.c_str());
 	}
 
 	for (const auto& mismatch : mismatches)
@@ -2634,13 +2641,86 @@ void VoiceServer::deliverVoice(uint16_t listener, const Player& player, const ui
 	}
 }
 
-bool VoiceServer::rejectSource(uint32_t ip, uint64_t t)
+namespace
 {
-	const auto it = sources_.find(ip);
+uint32_t hostOrder(uint32_t ip)
+{
+	uint8_t bytes[4];
+	std::memcpy(bytes, &ip, sizeof(bytes));
+	return (uint32_t(bytes[0]) << 24) | (uint32_t(bytes[1]) << 16) | (uint32_t(bytes[2]) << 8) | bytes[3];
+}
+}
+
+void VoiceServer::parseTrustedProxies(const std::string& list)
+{
+	trustedProxies_.clear();
+	std::string accepted;
+	std::size_t start = 0;
+	while (start <= list.size())
+	{
+		std::size_t end = list.find(',', start);
+		if (end == std::string::npos)
+		{
+			end = list.size();
+		}
+		std::string entry = list.substr(start, end - start);
+		start = end + 1;
+		entry.erase(std::remove_if(entry.begin(), entry.end(), [](unsigned char c) { return std::isspace(c); }), entry.end());
+		if (entry.empty())
+		{
+			continue;
+		}
+		int prefix = 32;
+		const auto slash = entry.find('/');
+		std::string address = entry.substr(0, slash);
+		if (slash != std::string::npos)
+		{
+			const std::string bits = entry.substr(slash + 1);
+			if (bits.empty() || bits.size() > 2 || !std::all_of(bits.begin(), bits.end(), [](unsigned char c) { return std::isdigit(c); })
+				|| (prefix = std::stoi(bits)) > 32)
+			{
+				LogWarning("voice_trusted_proxies: ignoring \"%s\" (expected an IPv4 address or CIDR range)", entry.c_str());
+				continue;
+			}
+		}
+		const uint32_t ip = ParseIp(address);
+		if (!ip)
+		{
+			LogWarning("voice_trusted_proxies: ignoring \"%s\" (expected an IPv4 address or CIDR range)", entry.c_str());
+			continue;
+		}
+		ProxyRange range;
+		range.mask = prefix ? ~uint32_t(0) << (32 - prefix) : 0;
+		range.network = hostOrder(ip) & range.mask;
+		trustedProxies_.push_back(range);
+		accepted += (accepted.empty() ? "" : ", ") + entry;
+	}
+	if (!trustedProxies_.empty())
+	{
+		LogInfo("trusted proxies: %s. Invalid packets from them block only the sending ip:port, not the whole IP.", accepted.c_str());
+	}
+}
+
+uint64_t VoiceServer::sourceKey(uint32_t ip, uint16_t port) const
+{
+	const uint32_t host = hostOrder(ip);
+	for (const ProxyRange& range : trustedProxies_)
+	{
+		if ((host & range.mask) == range.network)
+		{
+			return PackAddress(ip, port);
+		}
+	}
+	return ip;
+}
+
+bool VoiceServer::rejectSource(uint64_t source, uint64_t t)
+{
+	const auto it = sources_.find(source);
 	return it != sources_.end() && it->second.blockedUntil > t;
 }
 
-void VoiceServer::noteInvalid(uint32_t ip, uint64_t t)
+void VoiceServer::noteInvalid(uint64_t source, uint64_t t)
 {
 	constexpr uint64_t kWindowMs = 10000;
 	constexpr uint32_t kMaxInvalid = 30;
@@ -2656,7 +2736,7 @@ void VoiceServer::noteInvalid(uint32_t ip, uint64_t t)
 			return; // flood from many addresses: stay cheap
 		}
 	}
-	SourceState& state = sources_[ip];
+	SourceState& state = sources_[source];
 	if (t - state.windowStart > kWindowMs)
 	{
 		state.windowStart = t;
@@ -2668,7 +2748,7 @@ void VoiceServer::noteInvalid(uint32_t ip, uint64_t t)
 		std::lock_guard<std::mutex> lock(workerEventsMutex_);
 		if (blockedSources_.size() < 64)
 		{
-			blockedSources_.push_back(ip);
+			blockedSources_.push_back(source);
 		}
 	}
 }
@@ -2695,16 +2775,17 @@ void VoiceServer::workerLoop()
 void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uint16_t port)
 {
 	const uint64_t t = now();
+	const uint64_t source = sourceKey(ip, port);
 	// A blocked address still gets through with a valid session of a player
 	// connected from that same address: after a server restart the clients
 	// that stayed open keep sending with the old key and got their own IP
 	// blocked, and players behind one carrier NAT (mobile) share an IP.
-	const bool blocked = rejectSource(ip, t);
+	const bool blocked = rejectSource(source, t);
 	if (size < static_cast<int>(kHeaderSize) || size > static_cast<int>(vb::kMaxVoicePacketSize))
 	{
 		if (!blocked)
 		{
-			noteInvalid(ip, t);
+			noteInvalid(source, t);
 		}
 		return;
 	}
@@ -2714,7 +2795,7 @@ void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uin
 	{
 		if (!blocked)
 		{
-			noteInvalid(ip, t);
+			noteInvalid(source, t);
 		}
 		return;
 	}
@@ -2729,7 +2810,7 @@ void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uin
 		{
 			if (!blocked)
 			{
-				noteInvalid(ip, t);
+				noteInvalid(source, t);
 			}
 			return;
 		}
@@ -2739,7 +2820,7 @@ void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uin
 		{
 			if (!blocked)
 			{
-				noteInvalid(ip, t);
+				noteInvalid(source, t);
 			}
 			return;
 		}
@@ -2749,7 +2830,7 @@ void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uin
 			{
 				return;
 			}
-			sources_.erase(ip);
+			sources_.erase(source);
 			LogInfo("unblocked %s: player %u connected from it with a valid voice session", FormatIp(ip).c_str(), player);
 		}
 		// After the first valid packet the session is bound to that IP: a
@@ -2760,7 +2841,7 @@ void VoiceServer::handleDatagram(const uint8_t* data, int size, uint32_t ip, uin
 		{
 			if (ip != p.gameIp)
 			{
-				noteInvalid(ip, t);
+				noteInvalid(source, t);
 				return;
 			}
 			lockedIp_[player] = ip; // the game connection's own IP always wins

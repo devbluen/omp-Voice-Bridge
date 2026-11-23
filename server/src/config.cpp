@@ -210,6 +210,7 @@ Config LoadConfig(ConfigSource& source)
 	const Key bind { "VOICE_BRIDGE_BIND", "voice_bridge.bind", "voice_bind", "sampvoice.ip", nullptr };
 	const Key publicHost { "VOICE_BRIDGE_PUBLIC_HOST", "voice_bridge.public_host", "voice_public_host", nullptr, nullptr };
 	const Key strictIp { "VOICE_BRIDGE_STRICT_IP", "voice_bridge.strict_ip", "voice_strict_ip", nullptr, nullptr };
+	const Key trustedProxies { "VOICE_BRIDGE_TRUSTED_PROXIES", "voice_bridge.trusted_proxies", "voice_trusted_proxies", nullptr, nullptr };
 	const Key bitrate { "VOICE_BRIDGE_BITRATE", "voice_bridge.bitrate", "voice_bitrate", nullptr, nullptr };
 	const Key frameMs { "VOICE_BRIDGE_FRAME_MS", "voice_bridge.frame_ms", "voice_frame_ms", nullptr, nullptr };
 	const Key tunnel { "VOICE_BRIDGE_TUNNEL", "voice_bridge.tunnel", "voice_tunnel", nullptr, nullptr };
@@ -234,6 +235,7 @@ Config LoadConfig(ConfigSource& source)
 	lookupString(source, bind, config.bind);
 	lookupString(source, publicHost, config.publicHost);
 	lookupBool(source, strictIp, config.strictIp);
+	lookupString(source, trustedProxies, config.trustedProxies);
 	readRanged(source, bitrate, config.bitrate, 6000, 128000, "voice_bitrate");
 
 	int frame = config.frameMs;

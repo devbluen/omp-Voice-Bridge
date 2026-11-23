@@ -453,10 +453,19 @@ private:
 		uint32_t invalid = 0;
 		uint64_t blockedUntil = 0;
 	};
-	std::unordered_map<uint32_t, SourceState> sources_;
-	bool rejectSource(uint32_t ip, uint64_t now);
-	void noteInvalid(uint32_t ip, uint64_t now);
-	std::vector<uint32_t> blockedSources_; // reported by the worker, logged by tick
+	// Keyed by IP, or by PackAddress(ip, port) for a trusted proxy.
+	std::unordered_map<uint64_t, SourceState> sources_;
+	bool rejectSource(uint64_t source, uint64_t now);
+	void noteInvalid(uint64_t source, uint64_t now);
+	std::vector<uint64_t> blockedSources_; // reported by the worker, logged by tick
+	struct ProxyRange
+	{
+		uint32_t network = 0; // host byte order
+		uint32_t mask = 0;
+	};
+	std::vector<ProxyRange> trustedProxies_;
+	void parseTrustedProxies(const std::string& list);
+	uint64_t sourceKey(uint32_t ip, uint16_t port) const;
 	// Owned by the worker thread.
 	std::array<uint64_t, kMaxPlayers> rateWindow_ {};
 	std::array<uint32_t, kMaxPlayers> rateCount_ {};

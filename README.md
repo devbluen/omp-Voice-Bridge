@@ -103,6 +103,7 @@ voice_bitrate 24000
 | config.json | server.cfg | Default | Description |
 |---|---|---|---|
 | `strict_ip` | `voice_strict_ip` | false | Only accept voice from the game IP. When off, another IP (proxy/anti-DDoS) is accepted and logged. |
+| `trusted_proxies` | `voice_trusted_proxies` | - | Comma-separated IPv4 addresses or CIDR ranges (e.g. `203.0.113.7, 10.0.0.0/8`) of relays that forward many players from one IP. Invalid packets from them block only the sending IP and port, never the whole IP; per-player keys and limits still apply. |
 | `max_packets_per_second` | `voice_max_packets_per_second` | 80 | Per-player flood limit. |
 | `client_timeout_ms` | `voice_client_timeout_ms` | 15000 | After this long without a voice client, `VB_OnPlayerClientDetected` is called with `VB_CLIENT_NONE`. |
 | `debug` | `voice_debug` | false | Log the details (who hears whom, vehicles, dropped voice) on the console and in the voice log. |
@@ -367,7 +368,7 @@ Settings are stored in `voicebridge.ini` in the GTA folder. `voicebridge.log` re
 
 - Every player gets a random key; packets without a valid key or with a bad CRC are dropped.
 - After the first valid packet the session is bound to that IP (the game connection's IP always wins): a guessed key is useless from another machine.
-- An IP sending 30 invalid packets in 10 s (port scans or key guessing) is blocked for 5 minutes and logged.
+- An IP sending 30 invalid packets in 10 s (port scans or key guessing) is blocked for 5 minutes and logged. For a trusted proxy (`trusted_proxies`) the block applies to the sending IP and port only.
 - Each player has a packets-per-second limit.
 - The client never shows IPs, ports or the connection type; those stay in the server log.
 

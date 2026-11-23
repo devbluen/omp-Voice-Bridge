@@ -24,6 +24,10 @@ struct Config
 	std::string publicHost;
 	// Reject voice packets whose source IP differs from the game connection.
 	bool strictIp = false;
+	// Comma-separated IPv4 addresses or CIDR ranges of relays that forward
+	// many players from one IP.  Invalid packets from them block only the
+	// sending ip:port, never the whole IP.
+	std::string trustedProxies;
 	uint32_t bitrate = 24000;
 	// Opus frame length requested from Voice Bridge clients.  SampVoice
 	// clients can only decode 100 ms frames, so lower values make Voice
